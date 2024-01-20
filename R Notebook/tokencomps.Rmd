@@ -1,0 +1,456 @@
+---
+title: "SingularityNET Ecosystem Analysis"
+date: "Last updated: `r Sys.Date()`"
+output: html_notebook
+---
+
+## Preliminary Work: Install/Load Packages
+
+Below is a list of R packages that will be used throughout this R Notebook. 
+
+* The [devtools package](https://cran.r-project.org/package=devtools) contains the `install_github()` function, which allows us to install packages directly from GitHub. This will let us install the geckor package, which is no longer published to CRAN.
+* The [geckor package](https://github.com/next-game-solutions/geckor) is a wrapper for the [CoinGecko API](https://www.coingecko.com/en/api) and allows for easy import of bitcoin price data.
+* The [dplyr package](https://cran.r-project.org/package=dplyr) package enables additional functionality for transforming data frames.
+* The [xts package](https://cran.r-project.org/package=xts) is short for 'eXtensible Time Series', which contains tools for working with time series data.
+* The [ggplot2 package](https://cran.r-project.org/package=ggplot2) for graphics and visuals.
+
+```{r setup, results='hide'}
+# Create list of packages needed for this exercise, omit geckor since its not on CRAN
+list.of.packages = c("devtools","dplyr","xts","ggplot2","rmarkdown")
+# Check if any have not yet been installed
+new.packages = list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+# If any need to be installed, install them
+if(length(new.packages)) install.packages(new.packages)
+# Since geckor is no longer published to CRAN, install via GitHub
+library(devtools)
+devtools::install_github("next-game-solutions/geckor")
+# Load in the remaining packages
+library(geckor)
+library(dplyr)
+library(xts)
+library(ggplot2)
+```
+
+
+## Price Data Import
+
+Before we use the geckor package to import price data for the various crypto tokens, we need to create a vector of character strings that correspond to the CoinGecko ids for the coins/tokens that we'd like to analyze. These can be found by manually going to an asset's page on [CoinGecko.com](https://www.coingecko.com/) and copying the "API id" from the Info section. These ids also appear in the page url as well. 
+
+Once we have this list of coins, we can use the `coin_history_range()` function to download the daily price data in USD. The API requires that the start and end date parameters for the request are provided in a [POSIXct  date format](https://search.brave.com/search?q=POSIXct). This is done with the `as.POSIXct()` function. For a starting point, we'll use the first date that CoinGecko has an observed market capitalization for the original SingularityNET token (AGIX), which is February 1, 2018. The `Sys.Date()` function returns the current date, which is used as the end date for the request so that we pull as much data as possible.
+
+Currently, the free CoinGecko API has restrictions on both the number of assets per request and the overall usage (call credits/min). The limit on the number of coins per request is 5. So for the 8 assets of this analysis, we must split this into two requests to get all the price data. The two responses are then combined into a single data frame using `rbind()`.
+
+```{r pricedata}
+coinids = c("ethereum","singularitynet","singularitydao","nunet","rejuve-ai","hypercycle","cogito-protocol","sophiaverse")
+prices1 = coin_history_range(coin_id=coinids[1:4],
+                            vs_currency = "usd",
+                            from = as.POSIXct("2018-02-01"),
+                            to = as.POSIXct(Sys.Date()))
+# Pause for 120 seconds to avoid API rate limit
+Sys.sleep(120)
+prices2 = coin_history_range(coin_id=coinids[5:8],
+                            vs_currency = "usd",
+                            from = as.POSIXct("2023-03-16"), # RJV beginning
+                            to = as.POSIXct(Sys.Date()))
+prices = rbind(prices1,prices2)
+```
+
+
+## Data Cleaning
+
+Reformat each of the variables to an appropriate data type. The `timestamp` variable is converted to a date format, since the extra time elements of the POSIXct data type are not needed. The `coin_id` variable is reformatted to the factor data type since there are just a small number of categories. Then the `vs_currency` variable is deleted since all the prices are in USD units. Lastly, the `price`, `total_volume`, and `market_cap` variables are already in numeric formats, so nothing needs to be done for those.
+
+```{r cleanformats}
+prices_clean1 = prices
+prices_clean1$timestamp = as.Date(prices_clean1$timestamp)
+prices_clean1$coin_id = as.factor(prices_clean1$coin_id)
+prices_clean1$vs_currency = NULL
+```
+
+The next data cleaning step is to resolve a missing observation in the price series for the AGIX token on June 6, 2021. The next chunk will impute this missing observation by taking the average of the previous and next day's market cap, volume, and price. 
+
+```{r fixmissing}
+imputedobs = data.frame(timestamp=as.Date("2021-06-06"),
+                        coin_id="singularitynet",
+                        # Use the average of the previous and next day's price
+                        price=mean(prices_clean1$price[prices$coin_id=="singularitynet" & prices$timestamp %in% as.Date(c("2021-06-05","2021-06-07"))]),
+                        # Use the average of the previous and next day's trading volume
+                        total_volume=mean(prices_clean1$total_volume[prices$coin_id=="singularitynet" & prices$timestamp %in% as.Date(c("2021-06-05","2021-06-07"))]),
+                        # Use the average of the previous and next day's market cap
+                        market_cap=mean(prices_clean1$market_cap[prices$coin_id=="singularitynet" & prices$timestamp %in% as.Date(c("2021-06-05","2021-06-07"))]))
+# Insert imputed observation into data frame in appropriate position
+prevobs = max(which(prices_clean1$coin_id=="singularitynet" & prices_clean1$timestamp==as.Date("2021-06-05")))
+prices_clean2 = rbind(prices_clean1[1:prevobs,],
+                      imputedobs,
+                      prices_clean1[(prevobs+1):nrow(prices_clean1),])
+```
+
+Then before we get into the rest of the data cleaning process, let's create a new asset that represents the aggregate market capitalization of all the SingularityNET ecosystem tokens. This will be useful for comparing the growth of the ecosystem to the growth of the individual projects. We can do this by summing the market caps of each of the tokens. 
+
+```{r snet}
+snet = prices_clean2 |>
+  filter(coin_id %in% c("singularitynet","singularitydao","nunet","rejuve-ai","hypercycle","cogito-protocol","sophiaverse")) |>
+  group_by(timestamp) |>
+  summarise(market_cap=sum(market_cap),
+            total_volume=sum(total_volume))
+snet$coin_id = "snet-ecosystem"
+snet$price = snet$market_cap
+prices_clean3 = rbind(prices_clean2,snet)
+coinids_clean = c(coinids,"snet-ecosystem")
+```
+
+The following code chunk is a large one. This is because we loop the cleaning for each coin/token. So be sure to read the comments within the code chunk for more explanation of the steps in the process. After isolating the observations for a coin, it creates a separate xts object for three different frequencies of analysis: daily, weekly, and monthly. The less frequent series have a cost in that there are fewer observations to study. However, as time moves on, we will have more data to analyze. Then for each of those frequencies, we calculate the annualized returns, annualized growth rates in market cap, and daily growth rates in trading volume.
+
+```{r cleanloop}
+dfs_daily = list()
+dfs_weeks = list()
+dfs_month = list()
+
+#coin = coinids[1]
+for (coin in coinids_clean) {
+  # Start timer
+  t = proc.time()
+  # Extract price data for each coin
+  subdf = filter(prices_clean3, coin_id==coin)
+  # Create xts object for each frequency
+  dailyxts = xts(subdf[,3:5], order.by=as.Date(subdf$timestamp))
+  weeksxts = to.weekly(dailyxts)
+  monthxts = to.monthly(dailyxts)
+  # Calculate annualized return of the coin's price movements
+  dailyxts$annret = (log(as.numeric(dailyxts$price)) - log(as.numeric(lag(dailyxts$price))))*365*100
+  weeksxts$annret = (log(as.numeric(weeksxts$dailyxts.Close)) - log(as.numeric(lag(weeksxts$dailyxts.Close))))*(365/7)*100
+  monthxts$annret = (log(as.numeric(monthxts$dailyxts.Close)) - log(as.numeric(lag(monthxts$dailyxts.Close))))*12*100
+  # Calculate alternative annualized return measurement from the market cap of the coin
+  dailyxts$annret2 = (log(as.numeric(dailyxts$market_cap)) - log(as.numeric(lag(dailyxts$market_cap))))*365*100
+    # Since to.weekly and to.monthly only convert prices by default, we must run again for market caps.
+  weeksxts2 = to.weekly(dailyxts$market_cap)
+  weeksxts$annret2 = (log(as.numeric(weeksxts2$`dailyxts$market_cap.Close`)) - log(as.numeric(lag(weeksxts2$`dailyxts$market_cap.Close`))))*(365/7)*100
+  monthxts2 = to.monthly(dailyxts$market_cap)
+  monthxts$annret2 = (log(as.numeric(monthxts2$`dailyxts$market_cap.Close`)) - log(as.numeric(lag(monthxts2$`dailyxts$market_cap.Close`))))*12*100
+  # Also calculate volume growth rates and reduce to daily values
+  dailyxts$volgrowth = (log(as.numeric(dailyxts$total_volume)) - log(as.numeric(lag(dailyxts$total_volume))))*100
+  weeksxts$volgrowth = (log(as.numeric(weeksxts$dailyxts.Volume)) - log(as.numeric(lag(weeksxts$dailyxts.Volume))))*100/7
+  monthxts$volgrowth = (log(as.numeric(monthxts$dailyxts.Volume)) - log(as.numeric(lag(monthxts$dailyxts.Volume))))*100/(365/12)
+  # Save data frames to output object
+  dfs_daily[[coin]] = dailyxts
+  dfs_weeks[[coin]] = weeksxts
+  dfs_month[[coin]] = monthxts
+  # Stop timer and output result
+  T = proc.time() - t
+  print(paste("Cleaning of", coin, "completed in", as.character(round(T[3],2)), "seconds."))
+}
+```
+
+
+## Multivariate Return Distributions
+
+Compute the average annual return and volatility of each of the coins/tokens, as well as the correlation matrix, for the daily return series.
+
+```{r dailycors}
+# Compile data frame of annualized (price) returns
+daily_annrets = merge(dfs_daily$ethereum$annret,
+                      dfs_daily$singularitynet$annret,
+                      dfs_daily$singularitydao$annret,
+                      dfs_daily$nunet$annret,
+                      dfs_daily$`rejuve-ai`$annret,
+                      dfs_daily$hypercycle$annret,
+                      dfs_daily$`cogito-protocol`$annret,
+                      dfs_daily$sophiaverse$annret,
+                      dfs_daily$`snet-ecosystem`$annret)
+# Correct variable names
+colnames(daily_annrets) = c("ETH", "AGIX", "SDAO", "NTX", "RJV", "HYPC", "CGV", "SOPH", "SNET")
+# Compute average annual returns, volatility, and correlations
+Er_daily = colMeans(daily_annrets,na.rm=TRUE)
+Er_daily |> round(2)
+sd_daily = apply(daily_annrets,2,sd,na.rm=TRUE)
+sd_daily |> round(2)
+Sharpe_daily = Er_daily/sd_daily
+Sharpe_daily |> round(2)
+cor(daily_annrets, use="pairwise.complete.obs") |> round(2)
+```
+
+Compute the average annual return and volatility of each of the coins/tokens, as well as the correlation matrix, for the weekly return series.
+
+```{r weeklycors}
+# Compile data frame of annualized (price) returns
+weeks_annrets = merge(dfs_weeks$ethereum$annret,
+                      dfs_weeks$singularitynet$annret,
+                      dfs_weeks$singularitydao$annret,
+                      dfs_weeks$nunet$annret,
+                      dfs_weeks$`rejuve-ai`$annret,
+                      dfs_weeks$hypercycle$annret,
+                      dfs_weeks$`cogito-protocol`$annret,
+                      dfs_weeks$sophiaverse$annret,
+                      dfs_weeks$`snet-ecosystem`$annret)
+# Correct variable names
+colnames(weeks_annrets) = c("ETH", "AGIX", "SDAO", "NTX", "RJV", "HYPC", "CGV", "SOPH", "SNET")
+# Compute average annual returns, volatility, and correlations
+Er_weeks = colMeans(weeks_annrets,na.rm=TRUE)
+Er_weeks |> round(2)
+sd_weeks = apply(weeks_annrets,2,sd,na.rm=TRUE)
+sd_weeks |> round(2)
+Sharpe_weeks = Er_weeks/sd_weeks
+Sharpe_weeks |> round(2)
+cor(weeks_annrets, use="pairwise.complete.obs") |> round(2)
+```
+
+Compute the average annual return and volatility of each of the coins/tokens, as well as the correlation matrix, for the monthly return series.
+
+```{r monthlycors}
+# Compile data frame of annualized (price) returns
+month_annrets = merge(dfs_month$ethereum$annret,
+                      dfs_month$singularitynet$annret,
+                      dfs_month$singularitydao$annret,
+                      dfs_month$nunet$annret,
+                      dfs_month$`rejuve-ai`$annret,
+                      dfs_month$hypercycle$annret,
+                      dfs_month$`cogito-protocol`$annret,
+                      dfs_month$sophiaverse$annret,
+                      dfs_month$`snet-ecosystem`$annret)
+# Correct variable names
+colnames(month_annrets) = c("ETH", "AGIX", "SDAO", "NTX", "RJV", "HYPC", "CGV", "SOPH", "SNET")
+# Compute average annual returns, volatility, and correlations
+Er_month = colMeans(month_annrets,na.rm=TRUE)
+Er_month |> round(2)
+sd_month = apply(month_annrets,2,sd,na.rm=TRUE)
+sd_month |> round(2)
+Sharpe_month = Er_month/sd_month
+Sharpe_month |> round(2)
+cor(month_annrets, use="pairwise.complete.obs") |> round(2)
+```
+
+## ETH-adjusted Returns
+
+Now let's examine the relationship of the returns on the SingularityNET tokens to that of Ethereum, which is the blockchain that the tokens primarily transact on.
+
+First up is the SingularityNET token (AGIX):
+
+```{r agixregs}
+AGIXfit_daily = lm(AGIX~ETH, data=daily_annrets)
+summary(AGIXfit_daily)
+ggplot(daily_annrets,aes(y=AGIX, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$AGIXresid = xts(resid(AGIXfit_daily), order.by=as.Date(names(resid(AGIXfit_daily))))
+
+AGIXfit_weeks = lm(AGIX~ETH, data=weeks_annrets)
+summary(AGIXfit_weeks)
+ggplot(weeks_annrets,aes(y=AGIX, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$AGIXresids = xts(resid(AGIXfit_weeks), order.by=as.Date(names(resid(AGIXfit_weeks))))
+
+AGIXfit_month = lm(AGIX~ETH, data=month_annrets)
+summary(AGIXfit_month)
+ggplot(month_annrets,aes(y=AGIX, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets2 = data.frame(date=names(resid(AGIXfit_month)))
+month_annrets2$AGIXresids = resid(AGIXfit_month)
+```
+
+Next is the SingularityDAO token (SDAO):
+
+```{r sdaoregs}
+SDAOfit_daily = lm(SDAO~ETH, data=daily_annrets)
+summary(SDAOfit_daily)
+ggplot(daily_annrets,aes(y=SDAO, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$SDAOresid = xts(resid(SDAOfit_daily), order.by=as.Date(names(resid(SDAOfit_daily))))
+
+SDAOfit_weeks = lm(SDAO~ETH, data=weeks_annrets)
+summary(SDAOfit_weeks)
+ggplot(weeks_annrets,aes(y=SDAO, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$SDAOresids = xts(resid(SDAOfit_weeks), order.by=as.Date(names(resid(SDAOfit_weeks))))
+
+SDAOfit_month = lm(SDAO~ETH, data=month_annrets)
+summary(SDAOfit_month)
+ggplot(month_annrets,aes(y=SDAO, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets3 = data.frame(date=names(resid(SDAOfit_month)))
+month_annrets3$SDAOresids = resid(SDAOfit_month)
+month_annrets2 = merge(month_annrets2, month_annrets3, all.x=TRUE)
+```
+
+Then the NuNet token (NTX):
+
+```{r ntxregs}
+NTXfit_daily = lm(NTX~ETH, data=daily_annrets)
+summary(NTXfit_daily)
+ggplot(daily_annrets,aes(y=NTX, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$NTXresid = xts(resid(NTXfit_daily), order.by=as.Date(names(resid(NTXfit_daily))))
+
+NTXfit_weeks = lm(NTX~ETH, data=weeks_annrets)
+summary(NTXfit_weeks)
+ggplot(weeks_annrets,aes(y=NTX, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$NTXresids = xts(resid(NTXfit_weeks), order.by=as.Date(names(resid(NTXfit_weeks))))
+
+NTXfit_month = lm(NTX~ETH, data=month_annrets)
+summary(NTXfit_month)
+ggplot(month_annrets,aes(y=NTX, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets3 = data.frame(date=names(resid(NTXfit_month)))
+month_annrets3$NTXresids = resid(NTXfit_month)
+month_annrets2 = merge(month_annrets2, month_annrets3, all.x=TRUE)
+```
+
+Next is the Rejuve token (RJV):
+
+```{r rjvregs}
+RJVfit_daily = lm(RJV~ETH, data=daily_annrets)
+summary(RJVfit_daily)
+ggplot(daily_annrets,aes(y=RJV, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$RJVresid = xts(resid(RJVfit_daily), order.by=as.Date(names(resid(RJVfit_daily))))
+
+RJVfit_weeks = lm(RJV~ETH, data=weeks_annrets)
+summary(RJVfit_weeks)
+ggplot(weeks_annrets,aes(y=RJV, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$RJVresids = xts(resid(RJVfit_weeks), order.by=as.Date(names(resid(RJVfit_weeks))))
+
+RJVfit_month = lm(RJV~ETH, data=month_annrets)
+summary(RJVfit_month)
+ggplot(month_annrets,aes(y=RJV, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets3 = data.frame(date=names(resid(RJVfit_month)))
+month_annrets3$RJVresids = resid(RJVfit_month)
+month_annrets2 = merge(month_annrets2, month_annrets3, all.x=TRUE)
+```
+
+Then the HyperCycle token (HYPC):
+
+```{r hypcregs}
+HYPCfit_daily = lm(HYPC~ETH, data=daily_annrets)
+summary(HYPCfit_daily)
+ggplot(daily_annrets,aes(y=HYPC, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$HYPCresid = xts(resid(HYPCfit_daily), order.by=as.Date(names(resid(HYPCfit_daily))))
+
+HYPCfit_weeks = lm(HYPC~ETH, data=weeks_annrets)
+summary(HYPCfit_weeks)
+ggplot(weeks_annrets,aes(y=HYPC, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$HYPCresids = xts(resid(HYPCfit_weeks), order.by=as.Date(names(resid(HYPCfit_weeks))))
+
+HYPCfit_month = lm(HYPC~ETH, data=month_annrets)
+summary(HYPCfit_month)
+ggplot(month_annrets,aes(y=HYPC, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets3 = data.frame(date=names(resid(HYPCfit_month)))
+month_annrets3$HYPCresids = resid(HYPCfit_month)
+month_annrets2 = merge(month_annrets2, month_annrets3, all.x=TRUE)
+```
+
+Next is the Cogito token (CGV):
+
+```{r cgvregs}
+CGVfit_daily = lm(CGV~ETH, data=daily_annrets)
+summary(CGVfit_daily)
+ggplot(daily_annrets,aes(y=CGV, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$CGVresid = xts(resid(CGVfit_daily), order.by=as.Date(names(resid(CGVfit_daily))))
+
+CGVfit_weeks = lm(CGV~ETH, data=weeks_annrets)
+summary(CGVfit_weeks)
+ggplot(weeks_annrets,aes(y=CGV, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$CGVresids = xts(resid(CGVfit_weeks), order.by=as.Date(names(resid(CGVfit_weeks))))
+
+CGVfit_month = lm(CGV~ETH, data=month_annrets)
+summary(CGVfit_month)
+ggplot(month_annrets,aes(y=CGV, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets3 = data.frame(date=names(resid(CGVfit_month)))
+month_annrets3$CGVresids = resid(CGVfit_month)
+month_annrets2 = merge(month_annrets2, month_annrets3, all.x=TRUE)
+```
+
+Lastly is the Sophiaverse token (SOPH):
+
+```{r sophregs}
+SOPHfit_daily = lm(SOPH~ETH, data=daily_annrets)
+summary(SOPHfit_daily)
+ggplot(daily_annrets,aes(y=SOPH, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$SOPHresid = xts(resid(SOPHfit_daily), order.by=as.Date(names(resid(SOPHfit_daily))))
+
+SOPHfit_weeks = lm(SOPH~ETH, data=weeks_annrets)
+summary(SOPHfit_weeks)
+ggplot(weeks_annrets,aes(y=SOPH, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$SOPHresids = xts(resid(SOPHfit_weeks), order.by=as.Date(names(resid(SOPHfit_weeks))))
+
+SOPHfit_month = lm(SOPH~ETH, data=month_annrets)
+summary(SOPHfit_month)
+ggplot(month_annrets,aes(y=SOPH, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets3 = data.frame(date=names(resid(SOPHfit_month)))
+month_annrets3$SOPHresids = resid(SOPHfit_month)
+month_annrets2 = merge(month_annrets2, month_annrets3, all.x=TRUE)
+```
+
+Lastly, let's look at the ecosystem as a whole:
+
+```{r snetregs}
+SNETfit_daily = lm(SNET~ETH, data=daily_annrets)
+summary(SNETfit_daily)
+ggplot(daily_annrets,aes(y=SNET, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+daily_annrets$SNETresid = xts(resid(SNETfit_daily), order.by=as.Date(names(resid(SNETfit_daily))))
+
+SNETfit_weeks = lm(SNET~ETH, data=weeks_annrets)
+summary(SNETfit_weeks)
+ggplot(weeks_annrets,aes(y=SNET, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+weeks_annrets$SNETresids = xts(resid(SNETfit_weeks), order.by=as.Date(names(resid(SNETfit_weeks))))
+
+SNETfit_month = lm(SNET~ETH, data=month_annrets)
+summary(SNETfit_month)
+ggplot(month_annrets,aes(y=SNET, x=ETH))+
+  geom_point()+
+  geom_smooth(method="lm")
+month_annrets3 = data.frame(date=names(resid(SNETfit_month)))
+month_annrets3$SNETresids = resid(SNETfit_month)
+month_annrets2 = merge(month_annrets2, month_annrets3, all.x=TRUE)
+```
+
+### Residual Correlations
+
+Now that we have the residual series for each of the coins/tokens, let's look at the correlations between them. These represent the correlations of the asset returns after removing the effects that are explained by their relationship with Ethereum.
+
+```{r dailyresidcors}
+cor(daily_annrets[,10:17], use="pairwise.complete.obs") |> round(2)
+```
+
+```{r weeksresidcors}
+cor(weeks_annrets[,10:17], use="pairwise.complete.obs") |> round(2)
+```
+
+```{r monthresidcors}
+cor(month_annrets2[,-1], use="pairwise.complete.obs") |> round(2)
+```
+
