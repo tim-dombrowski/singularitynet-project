@@ -143,7 +143,7 @@
     },
     "callr": {
       "Package": "callr",
-      "Version": "3.7.3",
+      "Version": "3.7.5",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -152,7 +152,7 @@
         "processx",
         "utils"
       ],
-      "Hash": "9b2191ede20fa29828139b9900922e51"
+      "Hash": "9f0e4fae4963ba775a5e5c520838c87b"
     },
     "cli": {
       "Package": "cli",
@@ -191,10 +191,10 @@
     },
     "commonmark": {
       "Package": "commonmark",
-      "Version": "1.9.0",
+      "Version": "1.9.1",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "d691c61bff84bd63c383874d2d0c3307"
+      "Hash": "5d8225445acb167abf7797de48b2ee3c"
     },
     "cpp11": {
       "Package": "cpp11",
@@ -483,7 +483,7 @@
     },
     "ggplot2": {
       "Package": "ggplot2",
-      "Version": "3.4.4",
+      "Version": "3.5.0",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -504,7 +504,7 @@
         "vctrs",
         "withr"
       ],
-      "Hash": "313d31eff2274ecf4c1d3581db7241f9"
+      "Hash": "52ef83f93f74833007f193b2d4c159a2"
     },
     "gh": {
       "Package": "gh",
@@ -603,7 +603,7 @@
     },
     "httpuv": {
       "Package": "httpuv",
-      "Version": "1.6.13",
+      "Version": "1.6.14",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -614,7 +614,7 @@
         "promises",
         "utils"
       ],
-      "Hash": "d23d2879001f3d82ee9dc38a9ef53c4c"
+      "Hash": "16abeb167dbf511f8cc0552efaf05bab"
     },
     "httr": {
       "Package": "httr",
@@ -1100,13 +1100,13 @@
     },
     "renv": {
       "Package": "renv",
-      "Version": "1.0.3",
+      "Version": "1.0.4",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
         "utils"
       ],
-      "Hash": "41b847654f567341725473431dd0d5ab"
+      "Hash": "11abaf7c540ff33f94514d50f929bfd1"
     },
     "rlang": {
       "Package": "rlang",
@@ -1145,7 +1145,7 @@
     },
     "roxygen2": {
       "Package": "roxygen2",
-      "Version": "7.3.0",
+      "Version": "7.3.1",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -1167,7 +1167,7 @@
         "withr",
         "xml2"
       ],
-      "Hash": "31561c910b524c8313d8c26a692f8b9a"
+      "Hash": "c25fe7b2d8cba73d1b63c947bf7afdb9"
     },
     "rprojroot": {
       "Package": "rprojroot",
@@ -1399,7 +1399,7 @@
     },
     "tidyr": {
       "Package": "tidyr",
-      "Version": "1.3.0",
+      "Version": "1.3.1",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -1418,7 +1418,7 @@
         "utils",
         "vctrs"
       ],
-      "Hash": "e47debdc7ce599b070c8e78e8ac0cfcf"
+      "Hash": "915fb7ce036c22a6a33b5a8adb712eb1"
     },
     "tidyselect": {
       "Package": "tidyselect",
@@ -1462,7 +1462,7 @@
     },
     "usethis": {
       "Package": "usethis",
-      "Version": "2.2.2",
+      "Version": "2.2.3",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -1489,7 +1489,7 @@
         "withr",
         "yaml"
       ],
-      "Hash": "60e51f0b94d0324dc19e44110098fa9f"
+      "Hash": "d524fd42c517035027f866064417d7e6"
     },
     "utf8": {
       "Package": "utf8",
@@ -1564,14 +1564,15 @@
     },
     "xfun": {
       "Package": "xfun",
-      "Version": "0.41",
+      "Version": "0.42",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
+        "grDevices",
         "stats",
         "tools"
       ],
-      "Hash": "460a5e0fe46a80ef87424ad216028014"
+      "Hash": "fd1349170df31f7a10bd98b0189e85af"
     },
     "xml2": {
       "Package": "xml2",
@@ -1611,7 +1612,7 @@
     },
     "xts": {
       "Package": "xts",
-      "Version": "0.13.1",
+      "Version": "0.13.2",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
@@ -1619,7 +1620,7 @@
         "methods",
         "zoo"
       ],
-      "Hash": "b8aa1235fd8b0ff10756150b792dc60f"
+      "Hash": "7a7e2b2f6ef5fa41fb766d2a885af39e"
     },
     "yaml": {
       "Package": "yaml",
@@ -1630,10 +1631,10 @@
     },
     "zip": {
       "Package": "zip",
-      "Version": "2.3.0",
+      "Version": "2.3.1",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "d98c94dacb7e0efcf83b0a133a705504"
+      "Hash": "fcc4bd8e6da2d2011eb64a5e5cc685ab"
     },
     "zoo": {
       "Package": "zoo",

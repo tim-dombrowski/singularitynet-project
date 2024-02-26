@@ -1,16 +1,42 @@
 SingularityNET Ecosystem Analysis
 ================
-Last updated: 2024-01-20
+Last updated: 2024-02-26
 
 ## Preliminary Work: Install/Load Packages
 
-Below is a list of R packages that will be used throughout this R
-Notebook.
+To try and ensure that this R Notebook will run successfully, we’ll use
+the [renv
+package](https://cran.r-project.org/web/packages/renv/index.html) to
+create a project-specific library of packages. This will allow us to
+install the packages that we need for this project without affecting any
+other projects that we may be working on. Additionally, the project
+library will track the specific versions of the dependency packages so
+that any updates to those packages will not break this project.
 
-- The [devtools package](https://cran.r-project.org/package=devtools)
-  contains the `install_github()` function, which allows us to install
-  packages directly from GitHub. This will let us install the geckor
-  package, which is no longer published to CRAN.
+The code chunk below will first install the renv package if it is not
+already installed. Then we will load the package. Next, we’ll use the
+`restore()` function to install any packages listed in the renv.lock
+file. Once these packages are installed, we can load them into the R
+session using the `library()` commands. Below the code chunk, we’ll list
+out the packages that will be used in the project demo. And if you run
+into any trouble using renv, then you can use the second code chunk
+below and that should be an even more reliable approach to install the
+required packages.
+
+``` r
+# Install renv package if not already installed
+if(!"renv" %in% installed.packages()[,"Package"]) install.packages("renv")
+# Load renv package
+library(renv)
+# Use restore() to install any packages listed in the renv.lock file
+renv::restore(clean=TRUE, lockfile="../renv.lock")
+# Load in the packages
+library(geckor)
+library(dplyr)
+library(xts)
+library(ggplot2)
+```
+
 - The [geckor package](https://github.com/next-game-solutions/geckor) is
   a wrapper for the [CoinGecko API](https://www.coingecko.com/en/api)
   and allows for easy import of bitcoin price data.
@@ -22,6 +48,51 @@ Notebook.
 - The [ggplot2 package](https://cran.r-project.org/package=ggplot2) for
   graphics and visuals.
 
+Since the rmarkdown functionality is built into RStudio, this one is
+automatically loaded when we open the RStudio. So no need to use the
+`library()` function for this one. Another observation to make about the
+code chunk above is that it is labeled as ‘setup’, which is a special
+name, which the R Notebook will recognize and automatically run prior to
+running any other code chunk. This is useful for loading in packages and
+setting up other global options that will be used throughout the
+notebook.
+
+Then if you wish to try and update the versions of the various R
+packages in the lock file, you can use the `renv::update()` function to
+update the packages in the project library. However, it is possible that
+these updates could break the code in this notebook. If so, you may need
+to adapt the code to work with the updated packages.
+
+My recommendation is to first run through the code using the versions of
+the packages in the lock file. Then if you want to try and update the
+packages, you can do so and then run through the code again to see if it
+still works. If not, you can always revert back to the lock file
+versions using the `renv::restore()` function.
+
+If you update the packages and get everything working successfully, then
+you can update the lock file using the `renv::snapshot()` function. This
+will update the lock file with the versions of the packages that are
+currently installed in the project library. Then you can commit the
+updated lock file to the repository so that others can use the updated
+versions of the packages.
+
+### Alternative Package Installation Code
+
+If you run into any trouble using renv in the code chunk above, then you
+can use the code chunk below to install the required packages for this
+analysis. This method will first check if you have already installed the
+packages. If any are missing, it will then install them. Then it will
+load the packages into the R session. A potential flaw in this approach
+compared to using renv is that it will simply install the latest
+versions of the packages, which could potentially break some of the code
+in this notebook if any of the updates aren’t backwards compatible.
+
+As long as you have downloaded the entire project repository, the renv
+chunk above will likely be managing the packages. Thus, the `eval=FALSE`
+option is used to prevent this chunk from running unless manually
+executed. So if you only downloaded this one Rmd file, this code chunk
+should take care of installing the packages for you.
+
 ``` r
 # Create list of packages needed for this exercise, omit geckor since its not on CRAN
 list.of.packages = c("devtools","dplyr","xts","ggplot2","rmarkdown")
@@ -31,77 +102,11 @@ new.packages = list.of.packages[!(list.of.packages %in% installed.packages()[,"P
 if(length(new.packages)) install.packages(new.packages)
 # Since geckor is no longer published to CRAN, install via GitHub
 library(devtools)
-```
-
-    ## Loading required package: usethis
-
-``` r
 devtools::install_github("next-game-solutions/geckor")
-```
-
-    ## Skipping install of 'geckor' from a github remote, the SHA1 (40955dad) has not changed since last install.
-    ##   Use `force = TRUE` to force installation
-
-``` r
 # Load in the remaining packages
 library(geckor)
-```
-
-    ## R client for the CoinGecko API
-    ## Developed by Next Game Solutions (http://nextgamesolutions.com)
-
-``` r
 library(dplyr)
-```
-
-    ## 
-    ## Attaching package: 'dplyr'
-
-    ## The following objects are masked from 'package:stats':
-    ## 
-    ##     filter, lag
-
-    ## The following objects are masked from 'package:base':
-    ## 
-    ##     intersect, setdiff, setequal, union
-
-``` r
 library(xts)
-```
-
-    ## Loading required package: zoo
-
-    ## 
-    ## Attaching package: 'zoo'
-
-    ## The following objects are masked from 'package:base':
-    ## 
-    ##     as.Date, as.Date.numeric
-
-    ## 
-    ## ######################### Warning from 'xts' package ##########################
-    ## #                                                                             #
-    ## # The dplyr lag() function breaks how base R's lag() function is supposed to  #
-    ## # work, which breaks lag(my_xts). Calls to lag(my_xts) that you type or       #
-    ## # source() into this session won't work correctly.                            #
-    ## #                                                                             #
-    ## # Use stats::lag() to make sure you're not using dplyr::lag(), or you can add #
-    ## # conflictRules('dplyr', exclude = 'lag') to your .Rprofile to stop           #
-    ## # dplyr from breaking base R's lag() function.                                #
-    ## #                                                                             #
-    ## # Code in packages is not affected. It's protected by R's namespace mechanism #
-    ## # Set `options(xts.warn_dplyr_breaks_lag = FALSE)` to suppress this warning.  #
-    ## #                                                                             #
-    ## ###############################################################################
-
-    ## 
-    ## Attaching package: 'xts'
-
-    ## The following objects are masked from 'package:dplyr':
-    ## 
-    ##     first, last
-
-``` r
 library(ggplot2)
 ```
 
@@ -256,11 +261,11 @@ for (coin in coinids_clean) {
 ```
 
     ## [1] "Cleaning of ethereum completed in 0.01 seconds."
-    ## [1] "Cleaning of singularitynet completed in 0 seconds."
-    ## [1] "Cleaning of singularitydao completed in 0.02 seconds."
-    ## [1] "Cleaning of nunet completed in 0 seconds."
+    ## [1] "Cleaning of singularitynet completed in 0.02 seconds."
+    ## [1] "Cleaning of singularitydao completed in 0.01 seconds."
+    ## [1] "Cleaning of nunet completed in 0.02 seconds."
     ## [1] "Cleaning of rejuve-ai completed in 0.01 seconds."
-    ## [1] "Cleaning of hypercycle completed in 0 seconds."
+    ## [1] "Cleaning of hypercycle completed in 0.02 seconds."
     ## [1] "Cleaning of cogito-protocol completed in 0 seconds."
     ## [1] "Cleaning of sophiaverse completed in 0.02 seconds."
     ## [1] "Cleaning of snet-ecosystem completed in 0.01 seconds."
@@ -290,7 +295,7 @@ Er_daily |> round(2)
 ```
 
     ##     ETH    AGIX    SDAO     NTX     RJV    HYPC     CGV    SOPH    SNET 
-    ##   14.93  -12.42  -18.26  -56.32 -149.44   77.34  -64.53 -158.62    8.52
+    ##   18.37    4.78   -5.08  -36.36  -61.77   88.36  -56.88 -124.55   23.94
 
 ``` r
 sd_daily = apply(daily_annrets,2,sd,na.rm=TRUE)
@@ -298,7 +303,7 @@ sd_daily |> round(2)
 ```
 
     ##     ETH    AGIX    SDAO     NTX     RJV    HYPC     CGV    SOPH    SNET 
-    ## 1715.84 3624.17 2764.32 2726.85 2355.69 1917.25 1637.02 2592.88 3402.14
+    ## 1705.00 3607.64 2738.30 2715.27 2321.02 1843.36 1568.28 2460.99 3386.29
 
 ``` r
 Sharpe_daily = Er_daily/sd_daily
@@ -306,22 +311,22 @@ Sharpe_daily |> round(2)
 ```
 
     ##   ETH  AGIX  SDAO   NTX   RJV  HYPC   CGV  SOPH  SNET 
-    ##  0.01  0.00 -0.01 -0.02 -0.06  0.04 -0.04 -0.06  0.00
+    ##  0.01  0.00  0.00 -0.01 -0.03  0.05 -0.04 -0.05  0.01
 
 ``` r
 cor(daily_annrets, use="pairwise.complete.obs") |> round(2)
 ```
 
     ##       ETH AGIX SDAO  NTX  RJV HYPC  CGV SOPH SNET
-    ## ETH  1.00 0.46 0.53 0.45 0.27 0.22 0.25 0.11 0.46
-    ## AGIX 0.46 1.00 0.38 0.49 0.31 0.19 0.27 0.13 0.95
-    ## SDAO 0.53 0.38 1.00 0.51 0.27 0.09 0.19 0.08 0.43
-    ## NTX  0.45 0.49 0.51 1.00 0.29 0.16 0.24 0.06 0.54
-    ## RJV  0.27 0.31 0.27 0.29 1.00 0.15 0.26 0.06 0.34
-    ## HYPC 0.22 0.19 0.09 0.16 0.15 1.00 0.25 0.08 0.19
-    ## CGV  0.25 0.27 0.19 0.24 0.26 0.25 1.00 0.03 0.28
-    ## SOPH 0.11 0.13 0.08 0.06 0.06 0.08 0.03 1.00 0.16
-    ## SNET 0.46 0.95 0.43 0.54 0.34 0.19 0.28 0.16 1.00
+    ## ETH  1.00 0.46 0.52 0.44 0.28 0.22 0.27 0.14 0.46
+    ## AGIX 0.46 1.00 0.38 0.49 0.34 0.20 0.24 0.13 0.95
+    ## SDAO 0.52 0.38 1.00 0.51 0.29 0.09 0.16 0.07 0.44
+    ## NTX  0.44 0.49 0.51 1.00 0.31 0.15 0.21 0.08 0.54
+    ## RJV  0.28 0.34 0.29 0.31 1.00 0.16 0.26 0.09 0.38
+    ## HYPC 0.22 0.20 0.09 0.15 0.16 1.00 0.25 0.08 0.20
+    ## CGV  0.27 0.24 0.16 0.21 0.26 0.25 1.00 0.06 0.25
+    ## SOPH 0.14 0.13 0.07 0.08 0.09 0.08 0.06 1.00 0.15
+    ## SNET 0.46 0.95 0.44 0.54 0.38 0.20 0.25 0.15 1.00
 
 Compute the average annual return and volatility of each of the
 coins/tokens, as well as the correlation matrix, for the weekly return
@@ -346,7 +351,7 @@ Er_weeks |> round(2)
 ```
 
     ##     ETH    AGIX    SDAO     NTX     RJV    HYPC     CGV    SOPH    SNET 
-    ##   16.30  -11.93  -25.32  -56.25 -155.35  121.68  -58.67 -269.73    8.59
+    ##   19.67    5.26  -11.80  -36.10  -65.84  125.01  -50.75 -210.83   23.97
 
 ``` r
 sd_weeks = apply(weeks_annrets,2,sd,na.rm=TRUE)
@@ -354,7 +359,7 @@ sd_weeks |> round(2)
 ```
 
     ##     ETH    AGIX    SDAO     NTX     RJV    HYPC     CGV    SOPH    SNET 
-    ##  671.01 1248.81 1062.84  995.70  879.26  745.90  612.73  649.77 1274.08
+    ##  666.70 1251.02 1051.12  982.57  924.23  715.17  577.85  626.94 1273.76
 
 ``` r
 Sharpe_weeks = Er_weeks/sd_weeks
@@ -362,22 +367,22 @@ Sharpe_weeks |> round(2)
 ```
 
     ##   ETH  AGIX  SDAO   NTX   RJV  HYPC   CGV  SOPH  SNET 
-    ##  0.02 -0.01 -0.02 -0.06 -0.18  0.16 -0.10 -0.42  0.01
+    ##  0.03  0.00 -0.01 -0.04 -0.07  0.17 -0.09 -0.34  0.02
 
 ``` r
 cor(weeks_annrets, use="pairwise.complete.obs") |> round(2)
 ```
 
-    ##       ETH  AGIX  SDAO   NTX   RJV  HYPC  CGV  SOPH  SNET
-    ## ETH  1.00  0.50  0.48  0.50  0.44  0.00 0.23  0.08  0.46
-    ## AGIX 0.50  1.00  0.50  0.67  0.59 -0.01 0.16  0.20  0.97
-    ## SDAO 0.48  0.50  1.00  0.71  0.43 -0.02 0.33  0.01  0.42
-    ## NTX  0.50  0.67  0.71  1.00  0.47 -0.02 0.39  0.14  0.71
-    ## RJV  0.44  0.59  0.43  0.47  1.00 -0.04 0.37 -0.20  0.61
-    ## HYPC 0.00 -0.01 -0.02 -0.02 -0.04  1.00 0.34  0.01 -0.02
-    ## CGV  0.23  0.16  0.33  0.39  0.37  0.34 1.00  0.08  0.21
-    ## SOPH 0.08  0.20  0.01  0.14 -0.20  0.01 0.08  1.00  0.20
-    ## SNET 0.46  0.97  0.42  0.71  0.61 -0.02 0.21  0.20  1.00
+    ##       ETH AGIX SDAO  NTX  RJV HYPC  CGV SOPH SNET
+    ## ETH  1.00 0.50 0.48 0.51 0.50 0.05 0.24 0.24 0.46
+    ## AGIX 0.50 1.00 0.50 0.67 0.69 0.11 0.22 0.38 0.97
+    ## SDAO 0.48 0.50 1.00 0.71 0.50 0.02 0.32 0.14 0.42
+    ## NTX  0.51 0.67 0.71 1.00 0.54 0.07 0.43 0.23 0.72
+    ## RJV  0.50 0.69 0.50 0.54 1.00 0.06 0.40 0.05 0.70
+    ## HYPC 0.05 0.11 0.02 0.07 0.06 1.00 0.39 0.08 0.10
+    ## CGV  0.24 0.22 0.32 0.43 0.40 0.39 1.00 0.14 0.26
+    ## SOPH 0.24 0.38 0.14 0.23 0.05 0.08 0.14 1.00 0.38
+    ## SNET 0.46 0.97 0.42 0.72 0.70 0.10 0.26 0.38 1.00
 
 Compute the average annual return and volatility of each of the
 coins/tokens, as well as the correlation matrix, for the monthly return
@@ -402,7 +407,7 @@ Er_month |> round(2)
 ```
 
     ##     ETH    AGIX    SDAO     NTX     RJV    HYPC     CGV    SOPH    SNET 
-    ##   17.78   -5.03  -18.32  -65.12 -122.13  132.21  -41.13 -234.18   15.43
+    ##   21.26   12.22   -5.06  -45.32  -36.90  139.77  -37.69 -193.89   30.96
 
 ``` r
 sd_month = apply(month_annrets,2,sd,na.rm=TRUE)
@@ -410,7 +415,7 @@ sd_month |> round(2)
 ```
 
     ##    ETH   AGIX   SDAO    NTX    RJV   HYPC    CGV   SOPH   SNET 
-    ## 338.40 489.39 450.94 521.58 380.35 438.32 250.64 117.02 467.05
+    ## 338.04 506.79 452.84 520.20 479.09 412.43 243.27 233.69 481.74
 
 ``` r
 Sharpe_month = Er_month/sd_month
@@ -418,22 +423,22 @@ Sharpe_month |> round(2)
 ```
 
     ##   ETH  AGIX  SDAO   NTX   RJV  HYPC   CGV  SOPH  SNET 
-    ##  0.05 -0.01 -0.04 -0.12 -0.32  0.30 -0.16 -2.00  0.03
+    ##  0.06  0.02 -0.01 -0.09 -0.08  0.34 -0.15 -0.83  0.06
 
 ``` r
 cor(month_annrets, use="pairwise.complete.obs") |> round(2)
 ```
 
-    ##        ETH  AGIX  SDAO   NTX   RJV  HYPC   CGV  SOPH  SNET
-    ## ETH   1.00  0.63  0.59  0.61  0.41 -0.49  0.82  0.86  0.60
-    ## AGIX  0.63  1.00  0.78  0.90  0.74 -0.30  0.59  0.62  0.96
-    ## SDAO  0.59  0.78  1.00  0.79  0.53 -0.41  0.05  0.11  0.69
-    ## NTX   0.61  0.90  0.79  1.00  0.62 -0.20  0.39  0.32  0.92
-    ## RJV   0.41  0.74  0.53  0.62  1.00 -0.35  0.42  0.42  0.78
-    ## HYPC -0.49 -0.30 -0.41 -0.20 -0.35  1.00 -0.01 -0.41 -0.32
-    ## CGV   0.82  0.59  0.05  0.39  0.42 -0.01  1.00  0.88  0.55
-    ## SOPH  0.86  0.62  0.11  0.32  0.42 -0.41  0.88  1.00  0.56
-    ## SNET  0.60  0.96  0.69  0.92  0.78 -0.32  0.55  0.56  1.00
+    ##        ETH  AGIX  SDAO   NTX   RJV  HYPC  CGV  SOPH  SNET
+    ## ETH   1.00  0.64  0.61  0.64  0.71 -0.23 0.70  0.91  0.60
+    ## AGIX  0.64  1.00  0.78  0.88  0.85 -0.07 0.48  0.93  0.96
+    ## SDAO  0.61  0.78  1.00  0.80  0.72 -0.23 0.26  0.72  0.69
+    ## NTX   0.64  0.88  0.80  1.00  0.75 -0.13 0.50  0.62  0.90
+    ## RJV   0.71  0.85  0.72  0.75  1.00 -0.20 0.48  0.75  0.87
+    ## HYPC -0.23 -0.07 -0.23 -0.13 -0.20  1.00 0.03 -0.02 -0.08
+    ## CGV   0.70  0.48  0.26  0.50  0.48  0.03 1.00  0.65  0.48
+    ## SOPH  0.91  0.93  0.72  0.62  0.75 -0.02 0.65  1.00  0.91
+    ## SNET  0.60  0.96  0.69  0.90  0.87 -0.08 0.48  0.91  1.00
 
 ## ETH-adjusted Returns
 
@@ -454,19 +459,19 @@ summary(AGIXfit_daily)
     ## 
     ## Residuals:
     ##    Min     1Q Median     3Q    Max 
-    ## -67449  -1170   -121    974  61183 
+    ## -67470  -1177   -132    966  61172 
     ## 
     ## Coefficients:
     ##              Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -26.96326   68.92812  -0.391    0.696    
-    ## ETH           0.97387    0.04018  24.238   <2e-16 ***
+    ## (Intercept) -13.08138   68.10377  -0.192    0.848    
+    ## ETH           0.97216    0.03995  24.334   <2e-16 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 3217 on 2176 degrees of freedom
+    ## Residual standard error: 3205 on 2213 degrees of freedom
     ##   (1 observation deleted due to missingness)
-    ## Multiple R-squared:  0.2126, Adjusted R-squared:  0.2122 
-    ## F-statistic: 587.5 on 1 and 2176 DF,  p-value: < 2.2e-16
+    ## Multiple R-squared:  0.2111, Adjusted R-squared:  0.2107 
+    ## F-statistic: 592.2 on 1 and 2213 DF,  p-value: < 2.2e-16
 
 ``` r
 ggplot(daily_annrets,aes(y=AGIX, x=ETH))+
@@ -476,9 +481,11 @@ ggplot(daily_annrets,aes(y=AGIX, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 1 row containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 1 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1 row containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/agixregs-1.png)<!-- -->
 
@@ -495,19 +502,19 @@ summary(AGIXfit_weeks)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -8079.8  -460.7   -49.6   363.1  8841.5 
+    ## -8093.4  -467.3   -50.8   355.8  8820.2 
     ## 
     ## Coefficients:
     ##              Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -27.06993   61.47321   -0.44     0.66    
-    ## ETH           0.92921    0.09173   10.13   <2e-16 ***
+    ## (Intercept) -13.22600   60.93912  -0.217    0.828    
+    ## ETH           0.93982    0.09151  10.270   <2e-16 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 1084 on 309 degrees of freedom
+    ## Residual standard error: 1085 on 315 degrees of freedom
     ##   (1 observation deleted due to missingness)
-    ## Multiple R-squared:  0.2493, Adjusted R-squared:  0.2469 
-    ## F-statistic: 102.6 on 1 and 309 DF,  p-value: < 2.2e-16
+    ## Multiple R-squared:  0.2509, Adjusted R-squared:  0.2485 
+    ## F-statistic: 105.5 on 1 and 315 DF,  p-value: < 2.2e-16
 
 ``` r
 ggplot(weeks_annrets,aes(y=AGIX, x=ETH))+
@@ -517,8 +524,9 @@ ggplot(weeks_annrets,aes(y=AGIX, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1 rows containing non-finite values (`stat_smooth()`).
-    ## Removed 1 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1 row containing non-finite outside the scale range (`stat_smooth()`).
+    ## Removed 1 row containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/agixregs-2.png)<!-- -->
 
@@ -535,19 +543,19 @@ summary(AGIXfit_month)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -618.18 -261.89  -32.82  160.35 1283.25 
+    ## -642.26 -265.27  -45.98  147.26 1257.36 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -21.2910    45.3843  -0.469     0.64    
-    ## ETH           0.9144     0.1349   6.779 3.33e-09 ***
+    ## (Intercept)  -8.0556    46.5048  -0.173    0.863    
+    ## ETH           0.9537     0.1383   6.898 1.92e-09 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 381.9 on 69 degrees of freedom
+    ## Residual standard error: 393.8 on 70 degrees of freedom
     ##   (1 observation deleted due to missingness)
-    ## Multiple R-squared:  0.3998, Adjusted R-squared:  0.3911 
-    ## F-statistic: 45.96 on 1 and 69 DF,  p-value: 3.331e-09
+    ## Multiple R-squared:  0.4046, Adjusted R-squared:  0.3961 
+    ## F-statistic: 47.58 on 1 and 70 DF,  p-value: 1.919e-09
 
 ``` r
 ggplot(month_annrets,aes(y=AGIX, x=ETH))+
@@ -557,8 +565,9 @@ ggplot(month_annrets,aes(y=AGIX, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1 rows containing non-finite values (`stat_smooth()`).
-    ## Removed 1 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1 row containing non-finite outside the scale range (`stat_smooth()`).
+    ## Removed 1 row containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/agixregs-3.png)<!-- -->
 
@@ -580,19 +589,19 @@ summary(SDAOfit_daily)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -9895.7 -1200.0  -110.4   994.7 16269.5 
+    ## -9910.0 -1211.5  -113.6   993.3 16280.8 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -2.07474   75.01920  -0.028    0.978    
-    ## ETH          0.96681    0.04982  19.406   <2e-16 ***
+    ## (Intercept)  2.69667   73.30625   0.037    0.971    
+    ## ETH          0.95712    0.04929  19.417   <2e-16 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 2351 on 980 degrees of freedom
+    ## Residual standard error: 2340 on 1017 degrees of freedom
     ##   (1197 observations deleted due to missingness)
-    ## Multiple R-squared:  0.2776, Adjusted R-squared:  0.2769 
-    ## F-statistic: 376.6 on 1 and 980 DF,  p-value: < 2.2e-16
+    ## Multiple R-squared:  0.2705, Adjusted R-squared:  0.2697 
+    ## F-statistic:   377 on 1 and 1017 DF,  p-value: < 2.2e-16
 
 ``` r
 ggplot(daily_annrets,aes(y=SDAO, x=ETH))+
@@ -602,9 +611,11 @@ ggplot(daily_annrets,aes(y=SDAO, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1197 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 1197 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 1197 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1197 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/sdaoregs-1.png)<!-- -->
 
@@ -621,19 +632,19 @@ summary(SDAOfit_weeks)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -2178.2  -478.6  -151.8   370.5  4432.6 
+    ## -2184.1  -481.2  -104.0   388.4  4426.8 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -12.5921    78.9379  -0.160    0.873    
-    ## ETH           0.8868     0.1367   6.489 1.44e-09 ***
+    ## (Intercept)  -6.6742    76.4137  -0.087    0.931    
+    ## ETH           0.8870     0.1338   6.629 6.32e-10 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 933.7 on 138 degrees of freedom
+    ## Residual standard error: 923.3 on 144 degrees of freedom
     ##   (172 observations deleted due to missingness)
-    ## Multiple R-squared:  0.2338, Adjusted R-squared:  0.2282 
-    ## F-statistic:  42.1 on 1 and 138 DF,  p-value: 1.439e-09
+    ## Multiple R-squared:  0.2338, Adjusted R-squared:  0.2285 
+    ## F-statistic: 43.94 on 1 and 144 DF,  p-value: 6.318e-10
 
 ``` r
 ggplot(weeks_annrets,aes(y=SDAO, x=ETH))+
@@ -643,9 +654,11 @@ ggplot(weeks_annrets,aes(y=SDAO, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 172 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 172 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 172 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 172 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/sdaoregs-2.png)<!-- -->
 
@@ -662,19 +675,19 @@ summary(SDAOfit_month)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -637.68 -219.08  -48.27  154.11 1001.88 
+    ## -659.33 -211.60  -17.84  151.72  995.56 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -19.7866    65.4591  -0.302 0.764529    
-    ## ETH           1.0158     0.2541   3.997 0.000385 ***
+    ## (Intercept) -15.0466    63.4661  -0.237 0.814154    
+    ## ETH           1.0482     0.2441   4.293 0.000161 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 370.3 on 30 degrees of freedom
+    ## Residual standard error: 364.3 on 31 degrees of freedom
     ##   (40 observations deleted due to missingness)
-    ## Multiple R-squared:  0.3475, Adjusted R-squared:  0.3257 
-    ## F-statistic: 15.97 on 1 and 30 DF,  p-value: 0.0003852
+    ## Multiple R-squared:  0.3729, Adjusted R-squared:  0.3527 
+    ## F-statistic: 18.43 on 1 and 31 DF,  p-value: 0.0001606
 
 ``` r
 ggplot(month_annrets,aes(y=SDAO, x=ETH))+
@@ -684,9 +697,11 @@ ggplot(month_annrets,aes(y=SDAO, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 40 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 40 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 40 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 40 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/sdaoregs-3.png)<!-- -->
 
@@ -709,19 +724,19 @@ summary(NTXfit_daily)
     ## 
     ## Residuals:
     ##      Min       1Q   Median       3Q      Max 
-    ## -11071.8  -1151.3    -35.7    927.0  16757.1 
+    ## -11087.8  -1177.1    -49.3    918.5  16764.0 
     ## 
     ## Coefficients:
-    ##              Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -35.09730   87.06910  -0.403    0.687    
-    ## ETH           0.91987    0.06523  14.102   <2e-16 ***
+    ##             Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept) -25.4099    85.2090  -0.298    0.766    
+    ## ETH           0.9065     0.0647  14.010   <2e-16 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 2436 on 781 degrees of freedom
+    ## Residual standard error: 2440 on 818 degrees of freedom
     ##   (1396 observations deleted due to missingness)
-    ## Multiple R-squared:  0.203,  Adjusted R-squared:  0.2019 
-    ## F-statistic: 198.9 on 1 and 781 DF,  p-value: < 2.2e-16
+    ## Multiple R-squared:  0.1935, Adjusted R-squared:  0.1925 
+    ## F-statistic: 196.3 on 1 and 818 DF,  p-value: < 2.2e-16
 
 ``` r
 ggplot(daily_annrets,aes(y=NTX, x=ETH))+
@@ -731,9 +746,11 @@ ggplot(daily_annrets,aes(y=NTX, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1396 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 1396 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 1396 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1396 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/ntxregs-1.png)<!-- -->
 
@@ -750,19 +767,19 @@ summary(NTXfit_weeks)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -2282.8  -476.3   -91.6   345.1  4167.1 
+    ## -2290.6  -471.3   -94.3   327.5  4159.5 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -34.5495    81.8205  -0.422    0.674    
-    ## ETH           0.9417     0.1547   6.087 1.72e-08 ***
+    ## (Intercept) -24.7379    78.3801  -0.316    0.753    
+    ## ETH           0.9471     0.1499   6.317 5.11e-09 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 865.1 on 110 degrees of freedom
+    ## Residual standard error: 851.2 on 116 degrees of freedom
     ##   (200 observations deleted due to missingness)
-    ## Multiple R-squared:  0.252,  Adjusted R-squared:  0.2451 
-    ## F-statistic: 37.05 on 1 and 110 DF,  p-value: 1.718e-08
+    ## Multiple R-squared:  0.2559, Adjusted R-squared:  0.2495 
+    ## F-statistic:  39.9 on 1 and 116 DF,  p-value: 5.106e-09
 
 ``` r
 ggplot(weeks_annrets,aes(y=NTX, x=ETH))+
@@ -772,9 +789,11 @@ ggplot(weeks_annrets,aes(y=NTX, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 200 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 200 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 200 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 200 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/ntxregs-2.png)<!-- -->
 
@@ -791,19 +810,19 @@ summary(NTXfit_month)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -791.68 -225.33  -60.53  212.84 1115.41 
+    ## -798.72 -223.87  -32.01  179.14 1099.76 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -32.2091    82.9205  -0.388 0.701119    
-    ## ETH           1.2305     0.3236   3.803 0.000865 ***
+    ## (Intercept) -25.4160    78.7912  -0.323 0.749701    
+    ## ETH           1.2580     0.3039   4.139 0.000346 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 420.5 on 24 degrees of freedom
+    ## Residual standard error: 408.6 on 25 degrees of freedom
     ##   (46 observations deleted due to missingness)
-    ## Multiple R-squared:  0.376,  Adjusted R-squared:   0.35 
-    ## F-statistic: 14.46 on 1 and 24 DF,  p-value: 0.0008653
+    ## Multiple R-squared:  0.4066, Adjusted R-squared:  0.3829 
+    ## F-statistic: 17.13 on 1 and 25 DF,  p-value: 0.0003463
 
 ``` r
 ggplot(month_annrets,aes(y=NTX, x=ETH))+
@@ -813,9 +832,11 @@ ggplot(month_annrets,aes(y=NTX, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 46 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 46 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 46 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 46 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/ntxregs-3.png)<!-- -->
 
@@ -838,19 +859,19 @@ summary(RJVfit_daily)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -8099.0 -1237.8   -81.1   944.7 11660.0 
+    ## -8186.8 -1184.1  -116.3   888.4 11578.4 
     ## 
     ## Coefficients:
     ##              Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -183.1318   129.4258  -1.415    0.158    
-    ## ETH            0.7250     0.1476   4.913 1.46e-06 ***
+    ## (Intercept) -109.7857   120.3794  -0.912    0.362    
+    ## ETH            0.7377     0.1376   5.361 1.52e-07 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 2272 on 307 degrees of freedom
+    ## Residual standard error: 2233 on 344 degrees of freedom
     ##   (1870 observations deleted due to missingness)
-    ## Multiple R-squared:  0.0729, Adjusted R-squared:  0.06988 
-    ## F-statistic: 24.14 on 1 and 307 DF,  p-value: 1.461e-06
+    ## Multiple R-squared:  0.0771, Adjusted R-squared:  0.07442 
+    ## F-statistic: 28.74 on 1 and 344 DF,  p-value: 1.521e-07
 
 ``` r
 ggplot(daily_annrets,aes(y=RJV, x=ETH))+
@@ -860,9 +881,11 @@ ggplot(daily_annrets,aes(y=RJV, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1870 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 1870 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 1870 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1870 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/rjvregs-1.png)<!-- -->
 
@@ -879,19 +902,19 @@ summary(RJVfit_weeks)
     ## 
     ## Residuals:
     ##      Min       1Q   Median       3Q      Max 
-    ## -2273.67  -397.54    -4.47   374.74  1880.34 
+    ## -2366.13  -442.15     7.69   434.13  1764.92 
     ## 
     ## Coefficients:
-    ##              Estimate Std. Error t value Pr(>|t|)   
-    ## (Intercept) -211.0477   121.6970  -1.734  0.09022 . 
-    ## ETH            1.3765     0.4332   3.177  0.00279 **
+    ##              Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept) -158.6927   116.6849  -1.360 0.180180    
+    ## ETH            1.5758     0.3938   4.002 0.000217 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 798.8 on 42 degrees of freedom
+    ## Residual standard error: 808.6 on 48 degrees of freedom
     ##   (268 observations deleted due to missingness)
-    ## Multiple R-squared:  0.1938, Adjusted R-squared:  0.1746 
-    ## F-statistic:  10.1 on 1 and 42 DF,  p-value: 0.002787
+    ## Multiple R-squared:  0.2502, Adjusted R-squared:  0.2346 
+    ## F-statistic: 16.02 on 1 and 48 DF,  p-value: 0.0002167
 
 ``` r
 ggplot(weeks_annrets,aes(y=RJV, x=ETH))+
@@ -901,9 +924,11 @@ ggplot(weeks_annrets,aes(y=RJV, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 268 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 268 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 268 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 268 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/rjvregs-2.png)<!-- -->
 
@@ -919,18 +944,20 @@ summary(RJVfit_month)
     ## lm(formula = RJV ~ ETH, data = month_annrets)
     ## 
     ## Residuals:
-    ##     Min      1Q  Median      3Q     Max 
-    ## -379.68 -306.53  -33.44  180.05  704.49 
+    ##    Min     1Q Median     3Q    Max 
+    ## -510.8 -208.4    7.1  233.9  586.5 
     ## 
     ## Coefficients:
-    ##             Estimate Std. Error t value Pr(>|t|)
-    ## (Intercept) -195.740    130.076  -1.505    0.171
-    ## ETH            1.868      1.473   1.268    0.240
+    ##              Estimate Std. Error t value Pr(>|t|)  
+    ## (Intercept) -206.7017   121.1862  -1.706   0.1223  
+    ## ETH            2.8204     0.9344   3.018   0.0145 *
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 368.1 on 8 degrees of freedom
+    ## Residual standard error: 356 on 9 degrees of freedom
     ##   (62 observations deleted due to missingness)
-    ## Multiple R-squared:  0.1674, Adjusted R-squared:  0.06329 
-    ## F-statistic: 1.608 on 1 and 8 DF,  p-value: 0.2404
+    ## Multiple R-squared:  0.5031, Adjusted R-squared:  0.4478 
+    ## F-statistic: 9.111 on 1 and 9 DF,  p-value: 0.01452
 
 ``` r
 ggplot(month_annrets,aes(y=RJV, x=ETH))+
@@ -940,9 +967,11 @@ ggplot(month_annrets,aes(y=RJV, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 62 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 62 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 62 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 62 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/rjvregs-3.png)<!-- -->
 
@@ -965,19 +994,19 @@ summary(HYPCfit_daily)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -6151.6  -930.8  -264.1   981.6 10369.3 
+    ## -6157.7  -917.6  -273.6   936.4 10366.5 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept)  55.9129   117.2030   0.477 0.633730    
-    ## ETH           0.5055     0.1390   3.637 0.000334 ***
+    ## (Intercept)  57.1923   105.5480   0.542 0.588329    
+    ## ETH           0.4803     0.1249   3.844 0.000149 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 1873 on 254 degrees of freedom
+    ## Residual standard error: 1801 on 291 degrees of freedom
     ##   (1923 observations deleted due to missingness)
-    ## Multiple R-squared:  0.04949,    Adjusted R-squared:  0.04575 
-    ## F-statistic: 13.23 on 1 and 254 DF,  p-value: 0.0003344
+    ## Multiple R-squared:  0.04833,    Adjusted R-squared:  0.04506 
+    ## F-statistic: 14.78 on 1 and 291 DF,  p-value: 0.0001486
 
 ``` r
 ggplot(daily_annrets,aes(y=HYPC, x=ETH))+
@@ -987,9 +1016,11 @@ ggplot(daily_annrets,aes(y=HYPC, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1923 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 1923 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 1923 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1923 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/hypcregs-1.png)<!-- -->
 
@@ -1006,17 +1037,17 @@ summary(HYPCfit_weeks)
     ## 
     ## Residuals:
     ##      Min       1Q   Median       3Q      Max 
-    ## -1107.46  -387.24   -79.98   207.31  3146.06 
+    ## -1087.94  -395.13   -91.02   206.97  3120.32 
     ## 
     ## Coefficients:
-    ##              Estimate Std. Error t value Pr(>|t|)
-    ## (Intercept) 121.32260  128.12214   0.947    0.350
-    ## ETH           0.00747    0.47672   0.016    0.988
+    ##             Estimate Std. Error t value Pr(>|t|)
+    ## (Intercept) 115.9669   114.8025   1.010    0.318
+    ## ETH           0.1325     0.3966   0.334    0.740
     ## 
-    ## Residual standard error: 756.8 on 34 degrees of freedom
+    ## Residual standard error: 723 on 40 degrees of freedom
     ##   (276 observations deleted due to missingness)
-    ## Multiple R-squared:  7.222e-06,  Adjusted R-squared:  -0.0294 
-    ## F-statistic: 0.0002456 on 1 and 34 DF,  p-value: 0.9876
+    ## Multiple R-squared:  0.002782,   Adjusted R-squared:  -0.02215 
+    ## F-statistic: 0.1116 on 1 and 40 DF,  p-value: 0.7401
 
 ``` r
 ggplot(weeks_annrets,aes(y=HYPC, x=ETH))+
@@ -1026,9 +1057,11 @@ ggplot(weeks_annrets,aes(y=HYPC, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 276 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 276 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 276 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 276 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/hypcregs-2.png)<!-- -->
 
@@ -1044,18 +1077,18 @@ summary(HYPCfit_month)
     ## lm(formula = HYPC ~ ETH, data = month_annrets)
     ## 
     ## Residuals:
-    ##     Min      1Q  Median      3Q     Max 
-    ## -573.75 -162.10  -59.76  129.33  626.13 
+    ##    Min     1Q Median     3Q    Max 
+    ## -456.5 -240.3 -174.9  289.1  706.6 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)
-    ## (Intercept)  226.046    161.381   1.401    0.211
-    ## ETH           -2.319      1.694  -1.369    0.220
+    ## (Intercept) 187.6294   161.4434   1.162    0.283
+    ## ETH          -0.7277     1.1425  -0.637    0.544
     ## 
-    ## Residual standard error: 413.3 on 6 degrees of freedom
+    ## Residual standard error: 428.7 on 7 degrees of freedom
     ##   (64 observations deleted due to missingness)
-    ## Multiple R-squared:  0.2381, Adjusted R-squared:  0.1111 
-    ## F-statistic: 1.875 on 1 and 6 DF,  p-value: 0.22
+    ## Multiple R-squared:  0.05478,    Adjusted R-squared:  -0.08025 
+    ## F-statistic: 0.4057 on 1 and 7 DF,  p-value: 0.5444
 
 ``` r
 ggplot(month_annrets,aes(y=HYPC, x=ETH))+
@@ -1065,9 +1098,11 @@ ggplot(month_annrets,aes(y=HYPC, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 64 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 64 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 64 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 64 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/hypcregs-3.png)<!-- -->
 
@@ -1090,19 +1125,19 @@ summary(CGVfit_daily)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -5943.6  -557.9  -102.3   425.3 10167.0 
+    ## -5938.6  -552.6   -97.7   415.4 10180.0 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -92.6080   107.0426  -0.865 0.387903    
-    ## ETH           0.4765     0.1234   3.860 0.000149 ***
+    ## (Intercept) -96.6816    94.7055  -1.021    0.308    
+    ## ETH           0.4848     0.1094   4.431 1.39e-05 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 1588 on 219 degrees of freedom
+    ## Residual standard error: 1514 on 256 degrees of freedom
     ##   (1958 observations deleted due to missingness)
-    ## Multiple R-squared:  0.06371,    Adjusted R-squared:  0.05944 
-    ## F-statistic:  14.9 on 1 and 219 DF,  p-value: 0.000149
+    ## Multiple R-squared:  0.07123,    Adjusted R-squared:  0.06761 
+    ## F-statistic: 19.63 on 1 and 256 DF,  p-value: 1.391e-05
 
 ``` r
 ggplot(daily_annrets,aes(y=CGV, x=ETH))+
@@ -1112,9 +1147,11 @@ ggplot(daily_annrets,aes(y=CGV, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1958 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 1958 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 1958 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1958 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/cgvregs-1.png)<!-- -->
 
@@ -1131,17 +1168,17 @@ summary(CGVfit_weeks)
     ## 
     ## Residuals:
     ##      Min       1Q   Median       3Q      Max 
-    ## -1050.21  -281.23   -32.51   209.67  2380.43 
+    ## -1047.69  -286.40   -11.43   206.21  2374.12 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)
-    ## (Intercept) -90.7719   111.5613  -0.814    0.422
-    ## ETH           0.5214     0.4006   1.301    0.203
+    ## (Intercept) -90.8446    97.2554  -0.934    0.357
+    ## ETH           0.4825     0.3246   1.487    0.146
     ## 
-    ## Residual standard error: 605.8 on 29 degrees of freedom
+    ## Residual standard error: 568.4 on 35 degrees of freedom
     ##   (281 observations deleted due to missingness)
-    ## Multiple R-squared:  0.05517,    Adjusted R-squared:  0.02259 
-    ## F-statistic: 1.693 on 1 and 29 DF,  p-value: 0.2034
+    ## Multiple R-squared:  0.05939,    Adjusted R-squared:  0.03252 
+    ## F-statistic:  2.21 on 1 and 35 DF,  p-value: 0.1461
 
 ``` r
 ggplot(weeks_annrets,aes(y=CGV, x=ETH))+
@@ -1151,9 +1188,11 @@ ggplot(weeks_annrets,aes(y=CGV, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 281 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 281 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 281 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 281 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/cgvregs-2.png)<!-- -->
 
@@ -1169,20 +1208,20 @@ summary(CGVfit_month)
     ## lm(formula = CGV ~ ETH, data = month_annrets)
     ## 
     ## Residuals:
-    ## Jul 2023 Aug 2023 Sep 2023 Oct 2023 Nov 2023 Dec 2023 Jan 2024 
-    ##   160.19  -178.80   188.17  -102.04    67.17   -13.48  -121.22 
+    ##     Min      1Q  Median      3Q     Max 
+    ## -294.46 -100.38   40.72  146.93  176.81 
     ## 
     ## Coefficients:
     ##              Estimate Std. Error t value Pr(>|t|)  
-    ## (Intercept) -151.0924    68.4007  -2.209   0.0782 .
-    ## ETH            2.1737     0.6759   3.216   0.0236 *
+    ## (Intercept) -134.0870    78.2256  -1.714   0.1373  
+    ## ETH            1.2390     0.5233   2.368   0.0557 .
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 156.7 on 5 degrees of freedom
+    ## Residual standard error: 188.9 on 6 degrees of freedom
     ##   (65 observations deleted due to missingness)
-    ## Multiple R-squared:  0.6741, Adjusted R-squared:  0.6089 
-    ## F-statistic: 10.34 on 1 and 5 DF,  p-value: 0.02357
+    ## Multiple R-squared:  0.483,  Adjusted R-squared:  0.3969 
+    ## F-statistic: 5.606 on 1 and 6 DF,  p-value: 0.05569
 
 ``` r
 ggplot(month_annrets,aes(y=CGV, x=ETH))+
@@ -1192,9 +1231,11 @@ ggplot(month_annrets,aes(y=CGV, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 65 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 65 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 65 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 65 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/cgvregs-3.png)<!-- -->
 
@@ -1217,17 +1258,19 @@ summary(SOPHfit_daily)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -6258.3 -1095.8  -125.2   768.9 19757.4 
+    ## -6270.0 -1010.1  -160.8   739.7 19717.2 
     ## 
     ## Coefficients:
-    ##              Estimate Std. Error t value Pr(>|t|)
-    ## (Intercept) -178.4249   194.1034  -0.919    0.359
-    ## ETH            0.3299     0.2194   1.504    0.134
+    ##              Estimate Std. Error t value Pr(>|t|)  
+    ## (Intercept) -159.4475   167.3609  -0.953   0.3418  
+    ## ETH            0.3980     0.1902   2.093   0.0376 *
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 2584 on 176 degrees of freedom
+    ## Residual standard error: 2442 on 213 degrees of freedom
     ##   (2001 observations deleted due to missingness)
-    ## Multiple R-squared:  0.01269,    Adjusted R-squared:  0.007078 
-    ## F-statistic: 2.262 on 1 and 176 DF,  p-value: 0.1344
+    ## Multiple R-squared:  0.02015,    Adjusted R-squared:  0.01554 
+    ## F-statistic: 4.379 on 1 and 213 DF,  p-value: 0.03757
 
 ``` r
 ggplot(daily_annrets,aes(y=SOPH, x=ETH))+
@@ -1237,9 +1280,11 @@ ggplot(daily_annrets,aes(y=SOPH, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 2001 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 2001 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 2001 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 2001 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/sophregs-1.png)<!-- -->
 
@@ -1256,19 +1301,19 @@ summary(SOPHfit_weeks)
     ## 
     ## Residuals:
     ##      Min       1Q   Median       3Q      Max 
-    ## -1872.93  -197.46   -89.74   205.05  1585.89 
+    ## -1858.70  -293.25   -94.01   183.84  1634.15 
     ## 
     ## Coefficients:
     ##              Estimate Std. Error t value Pr(>|t|)  
-    ## (Intercept) -280.1021   135.1204  -2.073   0.0496 *
-    ## ETH            0.1773     0.4668   0.380   0.7076  
+    ## (Intercept) -253.0526   115.4630  -2.192   0.0366 *
+    ## ETH            0.4982     0.3703   1.345   0.1890  
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 661.7 on 23 degrees of freedom
+    ## Residual standard error: 618.7 on 29 degrees of freedom
     ##   (287 observations deleted due to missingness)
-    ## Multiple R-squared:  0.006233,   Adjusted R-squared:  -0.03697 
-    ## F-statistic: 0.1443 on 1 and 23 DF,  p-value: 0.7076
+    ## Multiple R-squared:  0.05873,    Adjusted R-squared:  0.02627 
+    ## F-statistic: 1.809 on 1 and 29 DF,  p-value: 0.189
 
 ``` r
 ggplot(weeks_annrets,aes(y=SOPH, x=ETH))+
@@ -1278,9 +1323,11 @@ ggplot(weeks_annrets,aes(y=SOPH, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 287 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 287 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 287 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 287 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/sophregs-2.png)<!-- -->
 
@@ -1296,20 +1343,20 @@ summary(SOPHfit_month)
     ## lm(formula = SOPH ~ ETH, data = month_annrets)
     ## 
     ## Residuals:
-    ## Aug 2023 Sep 2023 Oct 2023 Nov 2023 Dec 2023 Jan 2024 
-    ##    11.56    21.48   -62.01    48.06    62.63   -81.72 
+    ## Aug 2023 Sep 2023 Oct 2023 Nov 2023 Dec 2023 Jan 2024 Feb 2024 
+    ##    95.21    66.73   -77.04    14.75    22.61  -176.59    54.34 
     ## 
     ## Coefficients:
     ##              Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -292.1302    31.7471  -9.202 0.000775 ***
-    ## ETH            0.9973     0.2905   3.433 0.026460 *  
+    ## (Intercept) -324.5629    47.2288  -6.872 0.000998 ***
+    ## ETH            1.4826     0.2956   5.016 0.004048 ** 
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 65.86 on 4 degrees of freedom
+    ## Residual standard error: 104.2 on 5 degrees of freedom
     ##   (66 observations deleted due to missingness)
-    ## Multiple R-squared:  0.7466, Adjusted R-squared:  0.6833 
-    ## F-statistic: 11.79 on 1 and 4 DF,  p-value: 0.02646
+    ## Multiple R-squared:  0.8342, Adjusted R-squared:  0.8011 
+    ## F-statistic: 25.16 on 1 and 5 DF,  p-value: 0.004048
 
 ``` r
 ggplot(month_annrets,aes(y=SOPH, x=ETH))+
@@ -1319,9 +1366,11 @@ ggplot(month_annrets,aes(y=SOPH, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 66 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 66 rows containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 66 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 66 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/sophregs-3.png)<!-- -->
 
@@ -1344,19 +1393,19 @@ summary(SNETfit_daily)
     ## 
     ## Residuals:
     ##    Min     1Q Median     3Q    Max 
-    ## -67726  -1109   -107    937  64728 
+    ## -67746  -1104   -115    925  64718 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -5.11840   64.72171  -0.079    0.937    
-    ## ETH          0.91335    0.03773  24.209   <2e-16 ***
+    ## (Intercept)  7.19786   63.94019   0.113     0.91    
+    ## ETH          0.91172    0.03751  24.308   <2e-16 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 3020 on 2176 degrees of freedom
+    ## Residual standard error: 3009 on 2213 degrees of freedom
     ##   (1 observation deleted due to missingness)
-    ## Multiple R-squared:  0.2122, Adjusted R-squared:  0.2118 
-    ## F-statistic: 586.1 on 1 and 2176 DF,  p-value: < 2.2e-16
+    ## Multiple R-squared:  0.2107, Adjusted R-squared:  0.2104 
+    ## F-statistic: 590.9 on 1 and 2213 DF,  p-value: < 2.2e-16
 
 ``` r
 ggplot(daily_annrets,aes(y=SNET, x=ETH))+
@@ -1366,9 +1415,11 @@ ggplot(daily_annrets,aes(y=SNET, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1 rows containing non-finite values (`stat_smooth()`).
+    ## Warning: Removed 1 row containing non-finite outside the scale range
+    ## (`stat_smooth()`).
 
-    ## Warning: Removed 1 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1 row containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/snetregs-1.png)<!-- -->
 
@@ -1385,19 +1436,19 @@ summary(SNETfit_weeks)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -8648.1  -456.1   -63.4   339.4 10096.6 
+    ## -8660.1  -457.2   -61.7   330.6 10077.6 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept) -5.61959   64.30109  -0.087     0.93    
-    ## ETH          0.87193    0.09595   9.087   <2e-16 ***
+    ## (Intercept)   6.6296    63.5997   0.104    0.917    
+    ## ETH           0.8815     0.0955   9.230   <2e-16 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 1134 on 309 degrees of freedom
+    ## Residual standard error: 1132 on 315 degrees of freedom
     ##   (1 observation deleted due to missingness)
-    ## Multiple R-squared:  0.2109, Adjusted R-squared:  0.2083 
-    ## F-statistic: 82.57 on 1 and 309 DF,  p-value: < 2.2e-16
+    ## Multiple R-squared:  0.2129, Adjusted R-squared:  0.2104 
+    ## F-statistic: 85.19 on 1 and 315 DF,  p-value: < 2.2e-16
 
 ``` r
 ggplot(weeks_annrets,aes(y=SNET, x=ETH))+
@@ -1407,8 +1458,9 @@ ggplot(weeks_annrets,aes(y=SNET, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1 rows containing non-finite values (`stat_smooth()`).
-    ## Removed 1 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1 row containing non-finite outside the scale range (`stat_smooth()`).
+    ## Removed 1 row containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/snetregs-2.png)<!-- -->
 
@@ -1425,19 +1477,19 @@ summary(SNETfit_month)
     ## 
     ## Residuals:
     ##     Min      1Q  Median      3Q     Max 
-    ## -599.81 -223.16  -41.21  115.91 1239.98 
+    ## -621.62 -245.54  -41.85  128.22 1217.46 
     ## 
     ## Coefficients:
     ##             Estimate Std. Error t value Pr(>|t|)    
-    ## (Intercept)   0.7395    44.7925   0.017    0.987    
-    ## ETH           0.8259     0.1331   6.204 3.56e-08 ***
+    ## (Intercept)  12.6315    45.6292   0.277    0.783    
+    ## ETH           0.8618     0.1357   6.353 1.85e-08 ***
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
     ## 
-    ## Residual standard error: 376.9 on 69 degrees of freedom
+    ## Residual standard error: 386.4 on 70 degrees of freedom
     ##   (1 observation deleted due to missingness)
-    ## Multiple R-squared:  0.3581, Adjusted R-squared:  0.3488 
-    ## F-statistic: 38.49 on 1 and 69 DF,  p-value: 3.56e-08
+    ## Multiple R-squared:  0.3657, Adjusted R-squared:  0.3566 
+    ## F-statistic: 40.36 on 1 and 70 DF,  p-value: 1.847e-08
 
 ``` r
 ggplot(month_annrets,aes(y=SNET, x=ETH))+
@@ -1447,8 +1499,9 @@ ggplot(month_annrets,aes(y=SNET, x=ETH))+
 
     ## `geom_smooth()` using formula = 'y ~ x'
 
-    ## Warning: Removed 1 rows containing non-finite values (`stat_smooth()`).
-    ## Removed 1 rows containing missing values (`geom_point()`).
+    ## Warning: Removed 1 row containing non-finite outside the scale range (`stat_smooth()`).
+    ## Removed 1 row containing missing values or values outside the scale range
+    ## (`geom_point()`).
 
 ![](README_files/figure-gfm/snetregs-3.png)<!-- -->
 
@@ -1470,22 +1523,22 @@ cor(daily_annrets[,10:17], use="pairwise.complete.obs") |> round(2)
 ```
 
     ##           AGIXresid SDAOresid NTXresid RJVresid HYPCresid CGVresid SOPHresid
-    ## AGIXresid      1.00      0.23     0.35     0.18      0.07     0.15      0.08
-    ## SDAOresid      0.23      1.00     0.37     0.14     -0.05     0.06      0.03
-    ## NTXresid       0.35      0.37     1.00     0.17      0.05     0.12      0.00
-    ## RJVresid       0.18      0.14     0.17     1.00      0.10     0.20      0.02
-    ## HYPCresid      0.07     -0.05     0.05     0.10      1.00     0.20      0.04
-    ## CGVresid       0.15      0.06     0.12     0.20      0.20     1.00     -0.02
-    ## SOPHresid      0.08      0.03     0.00     0.02      0.04    -0.02      1.00
-    ## SNETresid      0.93      0.30     0.41     0.22      0.07     0.16      0.11
+    ## AGIXresid      1.00      0.23     0.35     0.24      0.10     0.13      0.07
+    ## SDAOresid      0.23      1.00     0.38     0.18     -0.03     0.03      0.01
+    ## NTXresid       0.35      0.38     1.00     0.22      0.06     0.10      0.02
+    ## RJVresid       0.24      0.18     0.22     1.00      0.11     0.19      0.05
+    ## HYPCresid      0.10     -0.03     0.06     0.11      1.00     0.20      0.04
+    ## CGVresid       0.13      0.03     0.10     0.19      0.20     1.00      0.00
+    ## SOPHresid      0.07      0.01     0.02     0.05      0.04     0.00      1.00
+    ## SNETresid      0.93      0.31     0.42     0.27      0.10     0.13      0.09
     ##           SNETresid
     ## AGIXresid      0.93
-    ## SDAOresid      0.30
-    ## NTXresid       0.41
-    ## RJVresid       0.22
-    ## HYPCresid      0.07
-    ## CGVresid       0.16
-    ## SOPHresid      0.11
+    ## SDAOresid      0.31
+    ## NTXresid       0.42
+    ## RJVresid       0.27
+    ## HYPCresid      0.10
+    ## CGVresid       0.13
+    ## SOPHresid      0.09
     ## SNETresid      1.00
 
 ``` r
@@ -1493,43 +1546,43 @@ cor(weeks_annrets[,10:17], use="pairwise.complete.obs") |> round(2)
 ```
 
     ##            AGIXresids SDAOresids NTXresids RJVresids HYPCresids CGVresids
-    ## AGIXresids       1.00       0.36      0.55      0.43      -0.02      0.00
-    ## SDAOresids       0.36       1.00      0.63      0.25      -0.03      0.24
-    ## NTXresids        0.55       0.63      1.00      0.25      -0.03      0.30
-    ## RJVresids        0.43       0.25      0.25      1.00      -0.05      0.31
-    ## HYPCresids      -0.02      -0.03     -0.03     -0.05       1.00      0.35
-    ## CGVresids        0.00       0.24      0.30      0.31       0.35      1.00
-    ## SOPHresids       0.19      -0.05      0.11     -0.31       0.01      0.04
-    ## SNETresids       0.97       0.29      0.61      0.44      -0.03      0.06
+    ## AGIXresids       1.00       0.36      0.55      0.52       0.09      0.08
+    ## SDAOresids       0.36       1.00      0.62      0.32      -0.01      0.22
+    ## NTXresids        0.55       0.62      1.00      0.31       0.04      0.36
+    ## RJVresids        0.52       0.32      0.31      1.00       0.04      0.33
+    ## HYPCresids       0.09      -0.01      0.04      0.04       1.00      0.39
+    ## CGVresids        0.08       0.22      0.36      0.33       0.39      1.00
+    ## SOPHresids       0.29       0.01      0.11     -0.14       0.04      0.01
+    ## SNETresids       0.97       0.30      0.61      0.53       0.09      0.12
     ##            SOPHresids SNETresids
-    ## AGIXresids       0.19       0.97
-    ## SDAOresids      -0.05       0.29
+    ## AGIXresids       0.29       0.97
+    ## SDAOresids       0.01       0.30
     ## NTXresids        0.11       0.61
-    ## RJVresids       -0.31       0.44
-    ## HYPCresids       0.01      -0.03
-    ## CGVresids        0.04       0.06
-    ## SOPHresids       1.00       0.20
-    ## SNETresids       0.20       1.00
+    ## RJVresids       -0.14       0.53
+    ## HYPCresids       0.04       0.09
+    ## CGVresids        0.01       0.12
+    ## SOPHresids       1.00       0.28
+    ## SNETresids       0.28       1.00
 
 ``` r
 cor(month_annrets2[,-1], use="pairwise.complete.obs") |> round(2)
 ```
 
     ##            AGIXresids SDAOresids NTXresids RJVresids HYPCresids CGVresids
-    ## AGIXresids       1.00       0.66      0.84      0.65       0.00      0.25
-    ## SDAOresids       0.66       1.00      0.67      0.55      -0.41     -0.04
-    ## NTXresids        0.84       0.67      1.00      0.56      -0.02      0.19
-    ## RJVresids        0.65       0.55      0.56      1.00      -0.17      0.22
-    ## HYPCresids       0.00      -0.41     -0.02     -0.17       1.00      0.80
-    ## CGVresids        0.25      -0.04      0.19      0.22       0.80      1.00
-    ## SOPHresids       0.30       0.15     -0.16      0.15      -0.02      0.51
-    ## SNETresids       0.94       0.56      0.87      0.70      -0.04      0.24
+    ## AGIXresids       1.00       0.63      0.78      0.42       0.19     -0.28
+    ## SDAOresids       0.63       1.00      0.66      0.61      -0.11     -0.31
+    ## NTXresids        0.78       0.66      1.00      0.54       0.03      0.09
+    ## RJVresids        0.42       0.61      0.54      1.00      -0.05     -0.05
+    ## HYPCresids       0.19      -0.11      0.03     -0.05       1.00      0.27
+    ## CGVresids       -0.28      -0.31      0.09     -0.05       0.27      1.00
+    ## SOPHresids       0.32       0.51     -0.07      0.27       0.28     -0.08
+    ## SNETresids       0.94       0.54      0.81      0.45       0.17     -0.26
     ##            SOPHresids SNETresids
-    ## AGIXresids       0.30       0.94
-    ## SDAOresids       0.15       0.56
-    ## NTXresids       -0.16       0.87
-    ## RJVresids        0.15       0.70
-    ## HYPCresids      -0.02      -0.04
-    ## CGVresids        0.51       0.24
-    ## SOPHresids       1.00       0.24
-    ## SNETresids       0.24       1.00
+    ## AGIXresids       0.32       0.94
+    ## SDAOresids       0.51       0.54
+    ## NTXresids       -0.07       0.81
+    ## RJVresids        0.27       0.45
+    ## HYPCresids       0.28       0.17
+    ## CGVresids       -0.08      -0.26
+    ## SOPHresids       1.00       0.32
+    ## SNETresids       0.32       1.00
