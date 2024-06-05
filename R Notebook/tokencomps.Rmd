@@ -18,16 +18,16 @@ library(renv)
 # Use restore() to install any packages listed in the renv.lock file
 renv::restore(clean=TRUE, lockfile="../renv.lock")
 # Load in the packages
-library(geckor)
-library(dplyr)
-library(xts)
-library(ggplot2)
+library(quantmod)
+library(tidyverse)
+library(corrplot)
+library(rmarkdown)
 ```
 
-* The [geckor package](https://github.com/next-game-solutions/geckor) is a wrapper for the [CoinGecko API](https://www.coingecko.com/en/api) and allows for easy import of bitcoin price data.
-* The [dplyr package](https://cran.r-project.org/package=dplyr) package enables additional functionality for transforming data frames.
-* The [xts package](https://cran.r-project.org/package=xts) is short for 'eXtensible Time Series', which contains tools for working with time series data.
-* The [ggplot2 package](https://cran.r-project.org/package=ggplot2) for graphics and visuals.
+* The [quantmod package](https://cran.r-project.org/package=quantmod) contains tools for importing and analyzing financial data.
+* The [tidyverse package](https://www.tidyverse.org/) contains a suite of packages for data manipulation and visualization.
+* The [corrplot package](https://cran.r-project.org/package=corrplot) lets us create correlation plots.
+* The [rmarkdown package](https://cran.r-project.org/package=rmarkdown) is used to g
 
 Since the rmarkdown functionality is built into RStudio, this one is automatically loaded when we open the RStudio. So no need to use the `library()` function for this one. Another observation to make about the code chunk above is that it is labeled as 'setup', which is a special name, which the R Notebook will recognize and automatically run prior to running any other code chunk. This is useful for loading in packages and setting up other global options that will be used throughout the notebook. 
 
@@ -45,149 +45,227 @@ As long as you have downloaded the entire project repository, the renv chunk abo
 
 ```{r setup2, results='hide', message=FALSE, eval=FALSE}
 # Create list of packages needed for this exercise, omit geckor since its not on CRAN
-list.of.packages = c("devtools","dplyr","xts","ggplot2","rmarkdown")
+list.of.packages = c("quantmod","tidyverse","corrplot","rmarkdown")
 # Check if any have not yet been installed
 new.packages = list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 # If any need to be installed, install them
 if(length(new.packages)) install.packages(new.packages)
-# Since geckor is no longer published to CRAN, install via GitHub
-library(devtools)
-devtools::install_github("next-game-solutions/geckor")
-# Load in the remaining packages
-library(geckor)
-library(dplyr)
-library(xts)
-library(ggplot2)
+library(quantmod)
+library(tidyverse)
+library(corrplot)
+library(rmarkdown)
 ```
 
 
-## Price Data Import
+## Data Import and Cleaning
 
-Before we use the geckor package to import price data for the various crypto tokens, we need to create a vector of character strings that correspond to the CoinGecko ids for the coins/tokens that we'd like to analyze. These can be found by manually going to an asset's page on [CoinGecko.com](https://www.coingecko.com/) and copying the "API id" from the Info section. These ids also appear in the page url as well. 
+### Token Price Data
 
-Once we have this list of coins, we can use the `coin_history_range()` function to download the daily price data in USD. The API requires that the start and end date parameters for the request are provided in a [POSIXct  date format](https://search.brave.com/search?q=POSIXct). This is done with the `as.POSIXct()` function. For a starting point, we'll use the first date that CoinGecko has an observed market capitalization for the original SingularityNET token (AGIX), which is February 1, 2018. The `Sys.Date()` function returns the current date, which is used as the end date for the request so that we pull as much data as possible.
+First, let's import the price data for all the SingularityNET ecosystem tokens, as well as the price data for Bitcoin (BTC), Ethereum (ETH), and the S&P 500 ETF (SPY). We'll use the `getSymbols()` function from the quantmod package to import the price data for these assets. This will download the price data from Yahoo Finance and store it in the R environment as xts objects.
 
-Currently, the free CoinGecko API has restrictions on both the number of assets per request and the overall usage (call credits/min). The limit on the number of coins per request is 5. So for the 8 assets of this analysis, we must split this into two requests to get all the price data. The two responses are then combined into a single data frame using `rbind()`.
-
-```{r pricedata}
-coinids = c("ethereum","singularitynet","singularitydao","nunet","rejuve-ai","hypercycle","cogito-protocol","sophiaverse")
-prices1 = coin_history_range(coin_id=coinids[1:4],
-                            vs_currency = "usd",
-                            from = as.POSIXct("2018-02-01"),
-                            to = as.POSIXct(Sys.Date()))
-# Pause for 120 seconds to avoid API rate limit
-Sys.sleep(120)
-prices2 = coin_history_range(coin_id=coinids[5:8],
-                            vs_currency = "usd",
-                            from = as.POSIXct("2023-03-16"), # RJV beginning
-                            to = as.POSIXct(Sys.Date()))
-prices = rbind(prices1,prices2)
+```{r assetdata, results='hide'}
+startdate = "2018-01-19"
+tickers = c("AGIX-USD",
+            "SDAO-USD",
+            "NTX13198-USD",
+            "RJV-USD",
+            "HYPC-USD",
+            "CGV-USD",
+            "SOPH-USD",
+            "BTC-USD",
+            "ETH-USD",
+            "SPY")
+getSymbols(tickers,
+           src="yahoo",
+           from=startdate, # begin at start of AGIX price series
+           to=Sys.Date())
 ```
 
+As of June 2024, several tokens generate a warning message about some missing values in the data. Depending on the time of day that the code is run, the most recent observation can sometimes be missing. Then in addition to that, three of the tokens have a period of three days in September 2023 where the data is missing.
 
-## Data Cleaning
+To more fully diagnose this issue, we can use the `complete.cases()` function to identify the rows with missing values. The following code chunk will output the rows with missing values for each of the tokens.
 
-Reformat each of the variables to an appropriate data type. The `timestamp` variable is converted to a date format, since the extra time elements of the POSIXct data type are not needed. The `coin_id` variable is reformatted to the factor data type since there are just a small number of categories. Then the `vs_currency` variable is deleted since all the prices are in USD units. Lastly, the `price`, `total_volume`, and `market_cap` variables are already in numeric formats, so nothing needs to be done for those.
-
-```{r cleanformats}
-prices_clean1 = prices
-prices_clean1$timestamp = as.Date(prices_clean1$timestamp)
-prices_clean1$coin_id = as.factor(prices_clean1$coin_id)
-prices_clean1$vs_currency = NULL
+```{r diagnosewarnings}
+`AGIX-USD`[!complete.cases(`AGIX-USD`),]
+`SDAO-USD`[!complete.cases(`SDAO-USD`),]
+`NTX13198-USD`[!complete.cases(`NTX13198-USD`),]
+`RJV-USD`[!complete.cases(`RJV-USD`),]
+`HYPC-USD`[!complete.cases(`HYPC-USD`),]
+`CGV-USD`[!complete.cases(`CGV-USD`),]
+`SOPH-USD`[!complete.cases(`SOPH-USD`),]
+`BTC-USD`[!complete.cases(`BTC-USD`),]
+`ETH-USD`[!complete.cases(`ETH-USD`),]
+SPY[!complete.cases(SPY),]
 ```
 
-The next data cleaning step is to resolve a missing observation in the price series for the AGIX token on June 6, 2021. The next chunk will impute this missing observation by taking the average of the previous and next day's market cap, volume, and price. 
+To address the issue of the three missing observations in Sept. 2023, we can use the `na.approx()` function to fill those missing values using linear interpolation. Since this these three observations are within a single month, this should only have a minimal impact on the daily price series, and it will have no impact after zooming out to a monthly frequency. The following code chunk will apply this function to the three tokens with missing values.
 
-```{r fixmissing}
-imputedobs = data.frame(timestamp=as.Date("2021-06-06"),
-                        coin_id="singularitynet",
-                        # Use the average of the previous and next day's price
-                        price=mean(prices_clean1$price[prices$coin_id=="singularitynet" & prices$timestamp %in% as.Date(c("2021-06-05","2021-06-07"))]),
-                        # Use the average of the previous and next day's trading volume
-                        total_volume=mean(prices_clean1$total_volume[prices$coin_id=="singularitynet" & prices$timestamp %in% as.Date(c("2021-06-05","2021-06-07"))]),
-                        # Use the average of the previous and next day's market cap
-                        market_cap=mean(prices_clean1$market_cap[prices$coin_id=="singularitynet" & prices$timestamp %in% as.Date(c("2021-06-05","2021-06-07"))]))
-# Insert imputed observation into data frame in appropriate position
-prevobs = max(which(prices_clean1$coin_id=="singularitynet" & prices_clean1$timestamp==as.Date("2021-06-05")))
-prices_clean2 = rbind(prices_clean1[1:prevobs,],
-                      imputedobs,
-                      prices_clean1[(prevobs+1):nrow(prices_clean1),])
+```{r fixwarnings}
+`HYPC-USD` = na.approx(`HYPC-USD`)
+`CGV-USD` = na.approx(`CGV-USD`)
+`SOPH-USD` = na.approx(`SOPH-USD`)
 ```
 
-Then before we get into the rest of the data cleaning process, let's create a new asset that represents the aggregate market capitalization of all the SingularityNET ecosystem tokens. This will be useful for comparing the growth of the ecosystem to the growth of the individual projects. We can do this by summing the market caps of each of the tokens. 
+As for the most recent missing values, we will resolve that later after merging the return series together. But first, let's use the `to.monthly()` function from the xts package to convert the daily price data to monthly price data. This will allow us to analyze the data at a higher level of aggregation that is unaffected by those missing value imputations and captures more of the long-term dynamics in the token prices.
 
-```{r snet}
-snet = prices_clean2 |>
-  filter(coin_id %in% c("singularitynet","singularitydao","nunet","rejuve-ai","hypercycle","cogito-protocol","sophiaverse")) |>
-  group_by(timestamp) |>
-  summarise(market_cap=sum(market_cap),
-            total_volume=sum(total_volume))
-snet$coin_id = "snet-ecosystem"
-snet$price = snet$market_cap
-prices_clean3 = rbind(prices_clean2,snet)
-coinids_clean = c(coinids,"snet-ecosystem")
+```{r assetcleaning, warning=FALSE}
+AGIXdaily = `AGIX-USD`
+AGIXmonth = to.monthly(AGIXdaily, name=NULL)
+SDAOdaily = `SDAO-USD`
+SDAOmonth = to.monthly(SDAOdaily, name=NULL)
+NTXdaily = `NTX13198-USD`
+NTXmonth = to.monthly(NTXdaily, name=NULL)
+RJVdaily = `RJV-USD`
+RJVmonth = to.monthly(RJVdaily, name=NULL)
+HYPCdaily = `HYPC-USD`
+HYPCmonth = to.monthly(HYPCdaily, name=NULL)
+CGVdaily = `CGV-USD`
+CGVmonth = to.monthly(CGVdaily, name=NULL)
+SOPHdaily = `SOPH-USD`
+SOPHmonth = to.monthly(SOPHdaily, name=NULL)
+BTCdaily = `BTC-USD`
+BTCmonth = to.monthly(BTCdaily, name=NULL)
+ETHdaily = `ETH-USD`
+ETHmonth = to.monthly(ETHdaily, name=NULL)
+SPYdaily = SPY
+SPYmonth = to.monthly(SPYdaily, name=NULL)
 ```
 
-The following code chunk is a large one. This is because we loop the cleaning for each coin/token. So be sure to read the comments within the code chunk for more explanation of the steps in the process. After isolating the observations for a coin, it creates a separate xts object for three different frequencies of analysis: daily, weekly, and monthly. The less frequent series have a cost in that there are fewer observations to study. However, as time moves on, we will have more data to analyze. Then for each of those frequencies, we calculate the annualized returns, annualized growth rates in market cap, and daily growth rates in trading volume.
+Another data cleaning step that we can take is to impute missing values in the daily SPY data for non-trading days. This will allow us to have a complete daily return series for the S&P 500 ETF. The following code chunk will create a daily xts object with the same length as the token data, merge the daily SPY observations, and impute missing values for the Adjusted close price using linear interpolation.
 
-```{r cleanloop}
-dfs_daily = list()
-dfs_weeks = list()
-dfs_month = list()
+```{r imputespy}
+# Create a daily xts object with the same length as the token data
+SPYdaily2 = xts(order.by=seq(min(index(SPY)), length=nrow(BTCdaily), by="day"))
+# Merge to daily SPY observations
+SPYdaily2 = merge(SPYdaily2, SPYdaily)
+# Impute missing values using linear interpolation
+SPYdaily2$SPY.Adjusted = na.approx(SPYdaily2$SPY.Adjusted, na.rm=FALSE)
+```
 
-#coin = coinids[1]
-for (coin in coinids_clean) {
-  # Start timer
-  t = proc.time()
-  # Extract price data for each coin
-  subdf = filter(prices_clean3, coin_id==coin)
-  # Create xts object for each frequency
-  dailyxts = xts(subdf[,3:5], order.by=as.Date(subdf$timestamp))
-  weeksxts = to.weekly(dailyxts)
-  monthxts = to.monthly(dailyxts)
-  # Calculate annualized return of the coin's price movements
-  dailyxts$annret = (log(as.numeric(dailyxts$price)) - log(as.numeric(lag(dailyxts$price))))*365*100
-  weeksxts$annret = (log(as.numeric(weeksxts$dailyxts.Close)) - log(as.numeric(lag(weeksxts$dailyxts.Close))))*(365/7)*100
-  monthxts$annret = (log(as.numeric(monthxts$dailyxts.Close)) - log(as.numeric(lag(monthxts$dailyxts.Close))))*12*100
-  # Calculate alternative annualized return measurement from the market cap of the coin
-  dailyxts$annret2 = (log(as.numeric(dailyxts$market_cap)) - log(as.numeric(lag(dailyxts$market_cap))))*365*100
-    # Since to.weekly and to.monthly only convert prices by default, we must run again for market caps.
-  weeksxts2 = to.weekly(dailyxts$market_cap)
-  weeksxts$annret2 = (log(as.numeric(weeksxts2$`dailyxts$market_cap.Close`)) - log(as.numeric(lag(weeksxts2$`dailyxts$market_cap.Close`))))*(365/7)*100
-  monthxts2 = to.monthly(dailyxts$market_cap)
-  monthxts$annret2 = (log(as.numeric(monthxts2$`dailyxts$market_cap.Close`)) - log(as.numeric(lag(monthxts2$`dailyxts$market_cap.Close`))))*12*100
-  # Also calculate volume growth rates and reduce to daily values
-  dailyxts$volgrowth = (log(as.numeric(dailyxts$total_volume)) - log(as.numeric(lag(dailyxts$total_volume))))*100
-  weeksxts$volgrowth = (log(as.numeric(weeksxts$dailyxts.Volume)) - log(as.numeric(lag(weeksxts$dailyxts.Volume))))*100/7
-  monthxts$volgrowth = (log(as.numeric(monthxts$dailyxts.Volume)) - log(as.numeric(lag(monthxts$dailyxts.Volume))))*100/(365/12)
-  # Save data frames to output object
-  dfs_daily[[coin]] = dailyxts
-  dfs_weeks[[coin]] = weeksxts
-  dfs_month[[coin]] = monthxts
-  # Stop timer and output result
-  T = proc.time() - t
-  print(paste("Cleaning of", coin, "completed in", as.character(round(T[3],2)), "seconds."))
-}
+Now that we have each of the assets return series saved as daily and monthly series, let's compute the annualized returns for each. To do this, we can assume continuous compounding and use the log returns to calculate the annualized returns.
+
+```{r assetreturns}
+AGIXdaily$AnnRet = diff(log(AGIXdaily$`AGIX-USD.Adjusted`))*365*100
+AGIXmonth$AnnRet = diff(log(AGIXmonth$Adjusted))*12*100
+SDAOdaily$AnnRet = diff(log(SDAOdaily$`SDAO-USD.Adjusted`))*365*100
+SDAOmonth$AnnRet = diff(log(SDAOmonth$Adjusted))*12*100
+NTXdaily$AnnRet = diff(log(NTXdaily$`NTX13198-USD.Adjusted`))*365*100
+NTXmonth$AnnRet = diff(log(NTXmonth$Adjusted))*12*100
+RJVdaily$AnnRet = diff(log(RJVdaily$`RJV-USD.Adjusted`))*365*100
+RJVmonth$AnnRet = diff(log(RJVmonth$Adjusted))*12*100
+HYPCdaily$AnnRet = diff(log(HYPCdaily$`HYPC-USD.Adjusted`))*365*100
+HYPCmonth$AnnRet = diff(log(HYPCmonth$Adjusted))*12*100
+CGVdaily$AnnRet = diff(log(CGVdaily$`CGV-USD.Adjusted`))*365*100
+CGVmonth$AnnRet = diff(log(CGVmonth$Adjusted))*12*100
+SOPHdaily$AnnRet = diff(log(SOPHdaily$`SOPH-USD.Adjusted`))*365*100
+SOPHmonth$AnnRet = diff(log(SOPHmonth$Adjusted))*12*100
+BTCdaily$AnnRet = diff(log(BTCdaily$`BTC-USD.Adjusted`))*365*100
+BTCmonth$AnnRet = diff(log(BTCmonth$Adjusted))*12*100
+ETHdaily$AnnRet = diff(log(ETHdaily$`ETH-USD.Adjusted`))*365*100
+ETHmonth$AnnRet = diff(log(ETHmonth$Adjusted))*12*100
+SPYdaily2$AnnRet = diff(log(SPYdaily2$SPY.Adjusted))*365*100
+SPYmonth$AnnRet = diff(log(SPYmonth$Adjusted))*12*100
+```
+
+### Economic Data
+
+Now let's collect some economic from [FRED](https://fred.stlouisfed.org/) to help us analyze the data. We will import data for the Consumer Price Index (CPI) and the 10-year Treasury yield. The CPI data will be used to compute monthly inflation rates, and the 10-year Treasury yields will be used to represent the risk-free rate of return.
+
+```{r econdata}
+fredassets = c("CPIAUCSL","DGS10")
+getSymbols(fredassets[1],
+           src="FRED",
+           from=as.Date(startdate) %m-% months(2), # begin two months before AGIX price series
+           to=Sys.Date())
+getSymbols(fredassets[2],
+           src="FRED",
+           from=startdate,
+           to=Sys.Date())
+```
+
+The CPI is short for the Consumer Price Index. This units of this data is price levels. so to obtain monthly inflation rates, by taking the log difference of the CPI series and annualizing it.
+
+```{r inflationcleaning}
+# Compute the annualized inflation rate in percentage units
+INFmonth = diff(log(CPIAUCSL))*12*100
+# Create a daily xts object with the same length as the stock data
+INFdaily = xts(order.by=seq(min(index(INFmonth)), length=nrow(BTCdaily), by="day"))
+# Merge to monthly inflation observations
+INFdaily = merge(INFdaily, INFmonth)
+# Impute missing values using linear interpolation
+INFdaily = na.approx(INFdaily, na.rm = FALSE)
+```
+
+Now for the 10-year Treasury yield. Unlike the stock and CPI variables, which are measured in prices or levels, the yields are already in the form of annualized returns with percentage units. Then as was done for the missing token data, we can use linear interpolation to fill in the missing values in the 10-year Treasury yield series. The following code chunk will apply this function to the 10-year Treasury yield series.
+
+```{r dgs10daily}
+# Create a daily xts object with the same length as the stock data
+DGS10daily = xts(order.by=seq(min(index(DGS10)), length=nrow(BTCdaily), by="day"))
+# Merge to monthly inflation observations
+DGS10daily = merge(DGS10daily, DGS10)
+# Impute missing values using linear interpolation
+DGS10daily = na.approx(DGS10daily, na.rm=FALSE)
+```
+
+Next, instead of using `to.monthly()` to convert the daily series into a monthly OHLC xts object, it'd be more appropriate to use the monthly average yield. This is done below using some tools from the dplyr and lubridate packages.
+
+```{r dgs10month, warning=FALSE}
+# Generate monthly OHLC data for the 10-year treasury yield
+DGS10month = to.monthly(DGS10daily, name=NULL)
+# Aggregate to monthly frequency and compute means
+DGS10dailydf = as.data.frame(DGS10daily)
+DGS10dailydf$date = index(DGS10daily)
+DGS10monthmean =  mutate(DGS10dailydf, date =floor_date(date,"month")) |> 
+  group_by(date) |> summarise(DGS10 = mean(DGS10, na.rm=TRUE))
+# Add the means to the monthly xts object
+DGS10month$Mean = DGS10monthmean$DGS10
+```
+
+### Merging Data
+
+Now that we have the return series for the SingularityNET tokens, as well as the economic data, we can merge them all together into a single data frame. This will allow us to analyze the relationships between the token returns and the economic data.
+
+```{r mergedata}
+# Merge the daily return series
+daily_annrets = merge(AGIXdaily$AnnRet,
+                      SDAOdaily$AnnRet,
+                      NTXdaily$AnnRet,
+                      RJVdaily$AnnRet,
+                      HYPCdaily$AnnRet,
+                      CGVdaily$AnnRet,
+                      SOPHdaily$AnnRet,
+                      BTCdaily$AnnRet,
+                      ETHdaily$AnnRet,
+                      SPYdaily2$AnnRet,
+                      INFdaily$CPIAUCSL,
+                      DGS10daily$DGS10
+                      )
+colnames(daily_annrets) = c("AGIX","SDAO","NTX","RJV","HYPC","CGV","SOPH","BTC","ETH","SPY","INF","RF")
+# Merge the monthly return series
+month_annrets = merge(AGIXmonth$AnnRet,
+                      SDAOmonth$AnnRet,
+                      NTXmonth$AnnRet,
+                      RJVmonth$AnnRet,
+                      HYPCmonth$AnnRet,
+                      CGVmonth$AnnRet,
+                      SOPHmonth$AnnRet,
+                      BTCmonth$AnnRet,
+                      ETHmonth$AnnRet,
+                      SPYmonth$AnnRet,
+                      INFmonth$CPIAUCSL,
+                      DGS10month$Mean
+                      )
+colnames(month_annrets) = c("AGIX","SDAO","NTX","RJV","HYPC","CGV","SOPH","BTC","ETH","SPY","INF","RF")
 ```
 
 
 ## Multivariate Return Distributions
 
+### Nominal Returns
+
 Compute the average annual return and volatility of each of the coins/tokens, as well as the correlation matrix, for the daily return series.
 
 ```{r dailycors}
-# Compile data frame of annualized (price) returns
-daily_annrets = merge(dfs_daily$ethereum$annret,
-                      dfs_daily$singularitynet$annret,
-                      dfs_daily$singularitydao$annret,
-                      dfs_daily$nunet$annret,
-                      dfs_daily$`rejuve-ai`$annret,
-                      dfs_daily$hypercycle$annret,
-                      dfs_daily$`cogito-protocol`$annret,
-                      dfs_daily$sophiaverse$annret,
-                      dfs_daily$`snet-ecosystem`$annret)
-# Correct variable names
-colnames(daily_annrets) = c("ETH", "AGIX", "SDAO", "NTX", "RJV", "HYPC", "CGV", "SOPH", "SNET")
 # Compute average annual returns, volatility, and correlations
 Er_daily = colMeans(daily_annrets,na.rm=TRUE)
 Er_daily |> round(2)
@@ -196,48 +274,12 @@ sd_daily |> round(2)
 Sharpe_daily = Er_daily/sd_daily
 Sharpe_daily |> round(2)
 cor(daily_annrets, use="pairwise.complete.obs") |> round(2)
-```
-
-Compute the average annual return and volatility of each of the coins/tokens, as well as the correlation matrix, for the weekly return series.
-
-```{r weeklycors}
-# Compile data frame of annualized (price) returns
-weeks_annrets = merge(dfs_weeks$ethereum$annret,
-                      dfs_weeks$singularitynet$annret,
-                      dfs_weeks$singularitydao$annret,
-                      dfs_weeks$nunet$annret,
-                      dfs_weeks$`rejuve-ai`$annret,
-                      dfs_weeks$hypercycle$annret,
-                      dfs_weeks$`cogito-protocol`$annret,
-                      dfs_weeks$sophiaverse$annret,
-                      dfs_weeks$`snet-ecosystem`$annret)
-# Correct variable names
-colnames(weeks_annrets) = c("ETH", "AGIX", "SDAO", "NTX", "RJV", "HYPC", "CGV", "SOPH", "SNET")
-# Compute average annual returns, volatility, and correlations
-Er_weeks = colMeans(weeks_annrets,na.rm=TRUE)
-Er_weeks |> round(2)
-sd_weeks = apply(weeks_annrets,2,sd,na.rm=TRUE)
-sd_weeks |> round(2)
-Sharpe_weeks = Er_weeks/sd_weeks
-Sharpe_weeks |> round(2)
-cor(weeks_annrets, use="pairwise.complete.obs") |> round(2)
+corrplot(cor(daily_annrets, use="pairwise.complete"), method="color")
 ```
 
 Compute the average annual return and volatility of each of the coins/tokens, as well as the correlation matrix, for the monthly return series.
 
 ```{r monthlycors}
-# Compile data frame of annualized (price) returns
-month_annrets = merge(dfs_month$ethereum$annret,
-                      dfs_month$singularitynet$annret,
-                      dfs_month$singularitydao$annret,
-                      dfs_month$nunet$annret,
-                      dfs_month$`rejuve-ai`$annret,
-                      dfs_month$hypercycle$annret,
-                      dfs_month$`cogito-protocol`$annret,
-                      dfs_month$sophiaverse$annret,
-                      dfs_month$`snet-ecosystem`$annret)
-# Correct variable names
-colnames(month_annrets) = c("ETH", "AGIX", "SDAO", "NTX", "RJV", "HYPC", "CGV", "SOPH", "SNET")
 # Compute average annual returns, volatility, and correlations
 Er_month = colMeans(month_annrets,na.rm=TRUE)
 Er_month |> round(2)
@@ -246,7 +288,29 @@ sd_month |> round(2)
 Sharpe_month = Er_month/sd_month
 Sharpe_month |> round(2)
 cor(month_annrets, use="pairwise.complete.obs") |> round(2)
+corrplot(cor(month_annrets, use="pairwise.complete"), method="color")
 ```
+
+### Real Returns
+
+Now let's compute the real returns for each of the coins/tokens by subtracting the inflation rate from the nominal returns. This will allow us to analyze the real returns of the tokens after adjusting for inflation.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## ETH-adjusted Returns
 
@@ -261,13 +325,6 @@ ggplot(daily_annrets,aes(y=AGIX, x=ETH))+
   geom_point()+
   geom_smooth(method="lm")
 daily_annrets$AGIXresid = xts(resid(AGIXfit_daily), order.by=as.Date(names(resid(AGIXfit_daily))))
-
-AGIXfit_weeks = lm(AGIX~ETH, data=weeks_annrets)
-summary(AGIXfit_weeks)
-ggplot(weeks_annrets,aes(y=AGIX, x=ETH))+
-  geom_point()+
-  geom_smooth(method="lm")
-weeks_annrets$AGIXresids = xts(resid(AGIXfit_weeks), order.by=as.Date(names(resid(AGIXfit_weeks))))
 
 AGIXfit_month = lm(AGIX~ETH, data=month_annrets)
 summary(AGIXfit_month)
