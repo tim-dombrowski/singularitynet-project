@@ -216,7 +216,7 @@ Since this inflation data is only available at a monthly frequency, we need to d
 * A more sophisticated method would be to use linear interpolation to fill in the missing values. As suggested by the name, this assumes that price growth moves linearly between the observed values. This method can be implemented with `na.approx()`.
 * Another more complex method is to use a cubic spline interpolation, which assumes that price growth moves smoothly between the observed values with non-linear dynamics. This method can be implemented with `na.spline()`.
 
-The following code chunk will apply each of the three methods to the monthly inflation series and plot the results.
+The following code chunk will apply each of the three methods to the monthly inflation series and plot the results. *Note: the division by 100 shifts the units from percentages back to decimals because the `scale_y_continuous(labels=percent)` setting has this conversion built into it. This setting displays the % on the y-axis values.*
 
 ```{r infimputing}
 # Create a daily xts object
@@ -233,16 +233,20 @@ INFdaily3 = na.spline(INFdaily, na.rm = FALSE)
 # Plot the three daily series to compare imputation methods
 ggplot(INFdaily1, aes(x=index(INFdaily1))) +
   # locf is black line
-  geom_line(aes(y=INFdaily1$CPIAUCSL, color = "LOCF"), na.rm = TRUE) +
+  geom_line(aes(y=INFdaily1$CPIAUCSL/100, color = "LOCF"), na.rm = TRUE) +
   # linear is red line
-  geom_line(aes(y=INFdaily2$CPIAUCSL, color = "Linear"), na.rm = TRUE) +
+  geom_line(aes(y=INFdaily2$CPIAUCSL/100, color = "Linear"), na.rm = TRUE) +
   # spline is blue line
-  geom_line(aes(y=INFdaily3$CPIAUCSL, color = "Spline"), na.rm = TRUE) +
+  geom_line(aes(y=INFdaily3$CPIAUCSL/100, color = "Spline"), na.rm = TRUE) + 
+  # change y-axis units to percentage
+  scale_y_continuous(labels=percent) +
   labs(title="Imputation of Daily Inflation Rates",
        x="",
        y="Annualized Inflation Rate",
        color = "Method") +
-  scale_color_manual(values = c("LOCF" = "black", "Linear" = "red", "Spline" = "blue"))
+  scale_color_manual(values=c("LOCF"="black", 
+                              "Linear"="red", 
+                              "Spline"="blue"))
 ```
 
 From the plot above, you can see the differences between the three imputation methods. Additionally, we can compute the correlation matrix between the three daily inflation series to see how closely they are related.
@@ -330,7 +334,7 @@ colnames(month_annrets) = c("AGIX","SDAO","NTX","RJV","HYPC","CGV","SOPH","BTC",
 
 ### Final Data Cleaning
 
-As some final cleaning steps, let's create two variations of each frequency's final dataset spanning two time ranges: full and complete. The full dataset will include all observations with observed AGIX returns and inflation rates, while the complete dataset will only include observations where all tokens have price data. The full version will allow us to compute correlations and conduct analysis with the maximium amount of data, while the complete version will enable more comparable comparisons since each pair/correlation will be based on the same number of observations and the same time range.
+As some final cleaning steps, let's create two variations of each frequency's final dataset spanning two time ranges: Full and Complete. The Full dataset will include all observations with observed AGIX returns and inflation rates, while the Complete dataset will only include observations where all tokens have price data. The Full version will allow us to compute correlations and conduct analysis with the maximium amount of data, while the Complete version will enable more comparable comparisons since each pair/correlation will be based on the same number of observations and the same time range. In more technical terms, the Full data tables are unbalanced panels and the Complete tables are balanced panels.
 
 ```{r finalcleaning}
 # Full data has non-missing crypto returns and inflation data
@@ -339,10 +343,23 @@ month_annrets_full = month_annrets[!is.na(month_annrets$AGIX) & !is.na(month_ann
 # Create subsets with only complete cases 
 daily_annrets_complete = daily_annrets[complete.cases(daily_annrets),]
 month_annrets_complete = month_annrets[complete.cases(month_annrets),]
+# Summarize time ranges of each final dataset
+paste("Daily Full Data       - Range: ", range(index(daily_annrets_full))[1], "-", range(index(daily_annrets_full))[2],
+      "T:", nrow(daily_annrets_full),
+      "N*T (non-missing):", sum(!is.na(daily_annrets_full)))
+paste("Daily Complete Data   - Range: ",range(index(daily_annrets_complete))[1],"-",range(index(daily_annrets_complete))[2],
+      "T:",nrow(daily_annrets_complete),
+      " N*T (non-missing):",sum(!is.na(daily_annrets_complete)))
+paste("Monthly Full Data     - Range: ",range(index(month_annrets_full))[1],"-",range(index(month_annrets_full))[2],
+      "    T:",nrow(month_annrets_full),
+      "  N*T (non-missing):",sum(!is.na(month_annrets_full)))
+paste("Monthly Complete Data - Range: ",range(index(month_annrets_complete))[1],"-",range(index(month_annrets_complete))[2],
+      "    T:",nrow(month_annrets_complete),
+      "   N*T (non-missing):",sum(!is.na(month_annrets_complete)))
 ```
 
 
-## Analysis
+## Descriptive Statistical Analysis
 
 ### Univariate Return Distributions
 
@@ -350,10 +367,10 @@ Let's start by examining the univariate return distributions for all the assets.
 
 To start, let's compute the average annual return for each of the assets in each of the four final versions of the data:
 
-* Daily returns over full time series
-* Daily returns for complete observations
-* Monthly returns over full time series
-* Monthly returns for complete observations
+* Daily returns over full time series (Daily Full Data)
+* Daily returns for complete observations (Daily Complete Data)
+* Monthly returns over full time series (Monthly Full Data)
+* Monthly returns for complete observations (Monthly Complete Data)
 
 ```{r nominalmeans}
 colMeans(daily_annrets_full, na.rm=TRUE) |> round(2)
@@ -362,7 +379,7 @@ colMeans(month_annrets_full, na.rm=TRUE) |> round(2)
 colMeans(month_annrets_complete, na.rm=TRUE) |> round(2)
 ```
 
-Next, let's measure the volatilities:
+Next, let's measure the volatilities (standard deviations):
 
 ```{r nominalvols}
 apply(daily_annrets_full,2,sd,na.rm=TRUE) |> round(2)
@@ -371,7 +388,7 @@ apply(month_annrets_full,2,sd,na.rm=TRUE) |> round(2)
 apply(month_annrets_complete,2,sd,na.rm=TRUE) |> round(2)
 ```
 
-Now let's compute the ratio of mean return to volatility, which is a measure of the risk-adjusted return. *This calculation will become a Sharpe ratio after we adjust for the risk-free rate.*
+Now let's compute the ratio of the average annual return to volatility, which is a measure of the risk-adjusted return. *This calculation will become a Sharpe ratio after we adjust for the risk-free rate and use excess returns.*
 
 ```{r nominalsharpe}
 (colMeans(daily_annrets_full,na.rm=TRUE)/apply(daily_annrets_full,2,sd,na.rm=TRUE)) |> round(4)
@@ -385,29 +402,24 @@ Now let's compute the ratio of mean return to volatility, which is a measure of 
 
 Now let's examine the multivariate return distributions for all the assets. For this, we'll compute the correlation matrix for each version and generate heatmaps to visualize those correlations. *Note: only the full versions require the `use="pairwise.complete` option since the complete versions only include observations where all tokens have price data.*
 
-```{r dailycorrs}
-# Full data
+```{r nominalcorrs}
+# Full daily data
 cor(daily_annrets_full, use="pairwise.complete") |> round(2)
 corrplot(cor(daily_annrets_full, use="pairwise.complete"), method="color")
-# Complete data
+# Complete daily data
 cor(daily_annrets_complete) |> round(2)
 corrplot(cor(daily_annrets_complete), method="color")
-```
-
-Now the same with the monthly return series:
-
-```{r monthlycorrs}
-# Full data
+# Full monthly data
 cor(month_annrets_full, use="pairwise.complete") |> round(2)
 corrplot(cor(month_annrets_full, use="pairwise.complete"), method="color")
-# Complete data
+# Complete monthly data
 cor(month_annrets_complete) |> round(2)
 corrplot(cor(month_annrets_complete), method="color")
 ```
 
 ### Real Returns
 
-Now let's compute the real returns for each of the assets by inflation-adjusting each nominal return series.
+Now let's compute the real returns for each of the assets by inflation-adjusting each nominal return series. The code chunk below will create a function to compute the real returns and then apply this function to each of the return series.
 
 ```{r realreturns}
 infadj = function(nominal, inflation) {
@@ -472,18 +484,55 @@ month_annrets_real_complete = merge(infadj(month_annrets_complete$AGIX, month_an
                                     )
 ```
 
+#### Real Return Distributions
 
+Now let's examine the real return distributions for all the assets.
 
+```{r realmeans}
+colMeans(daily_annrets_real_full, na.rm=TRUE) |> round(2)
+colMeans(daily_annrets_real_complete, na.rm=TRUE) |> round(2)
+colMeans(month_annrets_real_full, na.rm=TRUE) |> round(2)
+colMeans(month_annrets_real_complete, na.rm=TRUE) |> round(2)
+```
 
+```{r realvols}
+apply(daily_annrets_real_full,2,sd,na.rm=TRUE) |> round(2)
+apply(daily_annrets_real_complete,2,sd,na.rm=TRUE) |> round(2)
+apply(month_annrets_real_full,2,sd,na.rm=TRUE) |> round(2)
+apply(month_annrets_real_complete,2,sd,na.rm=TRUE) |> round(2)
+```
 
+```{r realsharpe}
+(colMeans(daily_annrets_real_full,na.rm=TRUE)/apply(daily_annrets_real_full,2,sd,na.rm=TRUE)) |> round(4)
+(colMeans(daily_annrets_real_complete,na.rm=TRUE)/apply(daily_annrets_real_complete,2,sd,na.rm=TRUE)) |> round(4)
+(colMeans(month_annrets_real_full,na.rm=TRUE)/apply(month_annrets_real_full,2,sd,na.rm=TRUE)) |> round(4)
+(colMeans(month_annrets_real_complete,na.rm=TRUE)/apply(month_annrets_real_complete,2,sd,na.rm=TRUE)) |> round(4)
+```
 
+#### Real Return Correlations
 
+Now let's examine the correlations between the real returns. Since the same inflation-adjustment transformation was applied to each nominal return series, the overall relationships should be mostly unchanged.
 
-### Risk Premiums (Excess Returns)
+```{r realcorrs}
+# Full daily data
+cor(daily_annrets_real_full, use="pairwise.complete") |> round(2)
+corrplot(cor(daily_annrets_real_full, use="pairwise.complete"), method="color")
+# Complete daily data
+cor(daily_annrets_real_complete) |> round(2)
+corrplot(cor(daily_annrets_real_complete), method="color")
+# Full monthly data
+cor(month_annrets_real_full, use="pairwise.complete") |> round(2)
+corrplot(cor(month_annrets_real_full, use="pairwise.complete"), method="color")
+# Complete monthly data
+cor(month_annrets_real_complete) |> round(2)
+corrplot(cor(month_annrets_real_complete), method="color")
+```
 
-Now let's compute the risk premiums for each of the assets by subtracting the real risk-free rate of return from the real return series.
+### Excess Returns (Risk Premiums)
 
-```{r riskpremiums}
+Now let's compute the risk premiums for each of the assets by subtracting the real risk-free rate of return from the real return series. In this case, our proxy for the risk-free asset is the 10-year Treasury yield. These are the excess returns that investors receive for taking on the risk of holding each asset. For brevity, we'll use `xs` as a prefix for the excess return series.
+
+```{r xsreturns}
 daily_annrets_xs_full = merge(daily_annrets_real_full$AGIX-daily_annrets_real_full$RF,
                               daily_annrets_real_full$SDAO-daily_annrets_real_full$RF,
                               daily_annrets_real_full$NTX-daily_annrets_real_full$RF,
@@ -537,29 +586,134 @@ month_annrets_xs_complete = merge(month_annrets_real_complete$AGIX-month_annrets
                                   )
 ```
 
-### Risk Premium Distributions
+#### Excess Return Distributions
 
-Now let's examine the correlations of the risk premiums for each of the assets.
+Let's start by examining the distributions of the risk premiums for each of the assets.
 
-```{r riskpremiumcorrs_daily}
-# Full data
-cor(daily_annrets_xs_full, use="pairwise.complete") |> round(2)
-corrplot(cor(daily_annrets_xs_full, use="pairwise.complete"), method="color")
-# Complete data
-cor(daily_annrets_xs_complete) |> round(2)
-corrplot(cor(daily_annrets_xs_complete), method="color")
+```{r xsmeans}
+colMeans(daily_annrets_xs_full, na.rm=TRUE) |> round(2)
+colMeans(daily_annrets_xs_complete, na.rm=TRUE) |> round(2)
+colMeans(month_annrets_xs_full, na.rm=TRUE) |> round(2)
+colMeans(month_annrets_xs_complete, na.rm=TRUE) |> round(2)
 ```
 
-Now the same with the monthly risk premiums:
+```{r xsvols}
+apply(daily_annrets_xs_full,2,sd,na.rm=TRUE) |> round(2)
+apply(daily_annrets_xs_complete,2,sd,na.rm=TRUE) |> round(2)
+apply(month_annrets_xs_full,2,sd,na.rm=TRUE) |> round(2)
+apply(month_annrets_xs_complete,2,sd,na.rm=TRUE) |> round(2)
+```
 
-```{r riskpremiumcorrs_monthly}
-# Full data
+And now that we have subtracted the risk-free rate, these risk-adjusted returns below are more formally known as the Sharpe ratios.
+
+```{r xssharpe}
+(colMeans(daily_annrets_xs_full,na.rm=TRUE)/apply(daily_annrets_xs_full,2,sd,na.rm=TRUE)) |> round(4)
+(colMeans(daily_annrets_xs_complete,na.rm=TRUE)/apply(daily_annrets_xs_complete,2,sd,na.rm=TRUE)) |> round(4)
+(colMeans(month_annrets_xs_full,na.rm=TRUE)/apply(month_annrets_xs_full,2,sd,na.rm=TRUE)) |> round(4)
+(colMeans(month_annrets_xs_complete,na.rm=TRUE)/apply(month_annrets_xs_complete,2,sd,na.rm=TRUE)) |> round(4)
+```
+
+#### Excess Return Correlations
+
+Now let's examine the correlations of the excess returns. Again, there should be little change from the nominal or real return correlations since the same transformations were applied to each series.
+
+```{r xscorrs}
+# Full daily data
+cor(daily_annrets_xs_full, use="pairwise.complete") |> round(2)
+corrplot(cor(daily_annrets_xs_full, use="pairwise.complete"), method="color")
+# Complete daily data
+cor(daily_annrets_xs_complete) |> round(2)
+corrplot(cor(daily_annrets_xs_complete), method="color")
+# Full monthly data
 cor(month_annrets_xs_full, use="pairwise.complete") |> round(2)
 corrplot(cor(month_annrets_xs_full, use="pairwise.complete"), method="color")
-# Complete data
+# Complete monthly data
 cor(month_annrets_xs_complete) |> round(2)
 corrplot(cor(month_annrets_xs_complete), method="color")
 ```
+
+
+## Regression Analysis
+
+Now let's conduct some more formal statistical analysis to explore the relationships between the asset returns. For brevity, the focus from this point on will exclusively focus on the excess returns for the Complete data series. Feel free to expand out to other versions of the final data to explore those results.
+
+### CAPM-Style Regressions
+
+To start, let's apply the traditional Capital Asset Pricing Model (CAPM) framework to the tokens (and NVDA). This model is estimated with a linear regression model of the form:
+
+$$R_{i,t} - R_{f,t} = \alpha_i + \beta_i(R_{m,t} - R_{f,t}) + \varepsilon_{i,t}$$
+
+Where:
+
+* $R_{f,t}$ is the risk-free rate at time $t$
+* $R_{i,t} - R_{f,t}$ is the excess return of asset $i$
+* $R_{m,t} - R_{f,t}$ is the excess return of the market portfolio (market risk premium)
+* $\alpha_i$ is the asset-specific intercept (alpha)
+* $\beta_i$ is the asset-specific market sensitivity (beta)
+* $\varepsilon_{i,t}$ is the error term
+
+Let's start by estimating the CAPM model for each of the assets using the excess returns and the excess return of SPY as the market portfolio.
+
+```{r capmregs}
+AGIXfit = lm(AGIX~SPY, data=daily_annrets_xs_complete)
+summary(AGIXfit)
+SDAOfit = lm(SDAO~SPY, data=daily_annrets_xs_complete)
+summary(SDAOfit)
+NTXfit = lm(NTX~SPY, data=daily_annrets_xs_complete)
+summary(NTXfit)
+RJVfit = lm(RJV~SPY, data=daily_annrets_xs_complete)
+summary(RJVfit)
+HYPCfit = lm(HYPC~SPY, data=daily_annrets_xs_complete)
+summary(HYPCfit)
+CGVfit = lm(CGV~SPY, data=daily_annrets_xs_complete)
+summary(CGVfit)
+SOPHfit = lm(SOPH~SPY, data=daily_annrets_xs_complete)
+summary(SOPHfit)
+BTCfit = lm(BTC~SPY, data=daily_annrets_xs_complete)
+summary(BTCfit)
+ETHfit = lm(ETH~SPY, data=daily_annrets_xs_complete)
+summary(ETHfit)
+NVDAfit = lm(NVDA~SPY, data=daily_annrets_xs_complete)
+summary(NVDAfit)
+```
+
+The key observation from these regression results is in the "Multiple R-squared" value, which is a measure of close of a relationship there is between the two variables. Of these assets, only NVDA exhibits a strong relationship with the market portfolio, which is not surprising given that it is the only stock in the group. The other crypto-assets all have low R-squared values, which is consistent with the generally low correlation between the crypto-assets and the stock market. This can also been seen in the model "p-value" estimates. Of which, some of the cryptos generate marginal significance. But overall, the CAPM model only appears appropriate for NVDA, and not the others.
+
+The closeness of fit from these models is key to drawing any other conclusions from the model estimates. So while we could compare all the CAPM betas, only the NVDA beta has any real meaning since the others lack statistical power. Thus, the NVDA alpha and beta estimates are the only ones that can be interpreted with any confidence.
+
+### ETH-Factor Models
+
+Now let's estimate an alternative to the CAPM model that replaces the stock market risk premium with the ETH risk premium. Since the SingularityNET tokens all operate as Ethereum tokens (some have cross-chain compatibility for Binancechain or Cardano), we might expect this to produce a more meaningful relationship.
+
+```{r ethregs}
+AGIXfit = lm(AGIX~ETH, data=daily_annrets_xs_complete)
+summary(AGIXfit)
+SDAOfit = lm(SDAO~ETH, data=daily_annrets_xs_complete)
+summary(SDAOfit)
+NTXfit = lm(NTX~ETH, data=daily_annrets_xs_complete)
+summary(NTXfit)
+RJVfit = lm(RJV~ETH, data=daily_annrets_xs_complete)
+summary(RJVfit)
+HYPCfit = lm(HYPC~ETH, data=daily_annrets_xs_complete)
+summary(HYPCfit)
+CGVfit = lm(CGV~ETH, data=daily_annrets_xs_complete)
+summary(CGVfit)
+SOPHfit = lm(SOPH~ETH, data=daily_annrets_xs_complete)
+summary(SOPHfit)
+BTCfit = lm(BTC~ETH, data=daily_annrets_xs_complete)
+summary(BTCfit)
+NVDAfit = lm(NVDA~ETH, data=daily_annrets_xs_complete)
+summary(NVDAfit)
+```
+
+
+
+
+
+
+
+
+
 
 
 
